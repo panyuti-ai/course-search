@@ -1,0 +1,128 @@
+[
+  {
+    "teacher": "葉春秀老師!",
+    "course": "資料結構",
+    "review": "葉春秀老師作業很多但助教很好，建議先學好 C 語言。",
+    "school": "逢甲大學",
+    "semester": "112-1",
+    "score": "85",
+    "difficulty": 3
+  },
+  {
+    "teacher": "陳立中",
+    "course": "資料結構",
+    "review": "要花時間練習，但收穫很多。",
+    "school": "逢甲大學",
+    "semester": "113-1",
+    "score": "85",
+    "difficulty": 3
+  },
+  {
+    "teacher": "林大量",
+    "course": "資料結構",
+    "review": "林大量老師進度飛快，但考題有方向性，建議多做練習題。",
+    "school": "逢甲大學",
+    "semester": "113-2",
+    "score": "78",
+    "difficulty": 4
+  },
+  {
+    "teacher": "許芳榮老師!",
+    "course": "演算法",
+    "review": "許芳榮老師講課認真，但考試偏難，適合愛挑戰的同學。",
+    "school": "逢甲大學",
+    "semester": "113-1",
+    "score": "82",
+    "difficulty": 4
+  },
+  {
+    "teacher": "張小艾",
+    "course": "演算法",
+    "review": "講解清楚但進度偏快。",
+    "school": "逢甲大學",
+    "semester": "112-2",
+    "score": "87",
+    "difficulty": 3
+  },
+  {
+    "teacher": "吳寶春",
+    "course": "演算法",
+    "review": "很生活化但考試會出細節，務必複習上課內容。",
+    "school": "逢甲大學",
+    "semester": "112-2",
+    "score": "84",
+    "difficulty": 3
+  },
+  {
+    "teacher": "陳青文老師!",
+    "course": "計算機組織",
+    "review": "陳青文老師棒棒棒講得很細但進度快，期末專案要花時間。",
+    "school": "逢甲大學",
+    "semester": "112-2",
+    "score": "90",
+    "difficulty": 4
+  },
+  {
+    "teacher": "李玉梅",
+    "course": "計算機組織",
+    "review": "概念很多，建議有基礎再修。",
+    "school": "逢甲大學",
+    "semester": "113-1",
+    "score": "78",
+    "difficulty": 4
+  },
+  {
+    "teacher": "陳立中",
+    "course": "資料科學導論",
+    "review": "老師很認真，也常補充實務案例，值得修。",
+    "school": "逢甲大學",
+    "semester": "113-2",
+    "score": "88",
+    "difficulty": 3
+  },
+  {
+    "teacher": "王大明",
+    "course": "資料科學導論",
+    "review": "老師認真教學，適合入門。",
+    "school": "逢甲大學",
+    "semester": "112-1",
+    "score": "80",
+    "difficulty": 2
+  },
+  {
+    "teacher": "黃金發",
+    "course": "作業系統",
+    "review": "考試偏難，但助教很給力。",
+    "school": "逢甲大學",
+    "semester": "113-1",
+    "score": "82",
+    "difficulty": 4
+  },
+  {
+    "teacher": "鄭小米",
+    "course": "作業系統",
+    "review": "理論重，期末 project 很硬。",
+    "school": "逢甲大學",
+    "semester": "113-2",
+    "score": "79",
+    "difficulty": 4
+  },
+  {
+    "teacher": "周小平",
+    "course": "網路概論",
+    "review": "課程內容生活化，容易理解。",
+    "school": "逢甲大學",
+    "semester": "112-2",
+    "score": "89",
+    "difficulty": 2
+  },
+  {
+    "teacher": "李金玉",
+    "course": "網路概論",
+    "review": "非常細心，每堂都有小考，建議不要曠課。",
+    "school": "逢甲大學",
+    "semester": "113-1",
+    "score": "86",
+    "difficulty": 3
+  }
+]

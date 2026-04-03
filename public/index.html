@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="Course Search 選課小幫手：整合課程資料、難度指標與 AI 建議，幫助你快速找到最適合的課程。" />
+    <title>Course Search 選課小幫手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="new_styles.css" />
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '"Noto Sans TC"', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        notion: {
+                            bg: '#ffffff',
+                            'bg-secondary': '#f7f7f5',
+                            'bg-hover': '#efefed',
+                            text: '#37352f',
+                            'text-secondary': '#787774',
+                            border: '#e3e2de',
+                            accent: '#2eaadc',
+                            'accent-light': '#d3edf6',
+                            red: '#eb5757',
+                            orange: '#d9730d',
+                            yellow: '#dfab01',
+                            green: '#0f7b6c',
+                            blue: '#2eaadc',
+                            purple: '#6940a5',
+                            pink: '#ad1a72',
+                            brown: '#9f6b53',
+                            gray: '#9b9a97',
+                        },
+                        dark: {
+                            bg: '#191919',
+                            'bg-secondary': '#202020',
+                            card: '#252525',
+                            border: '#333333',
+                            'border-hover': '#454545',
+                            text: 'rgba(255,255,255,0.81)',
+                            'text-secondary': 'rgba(255,255,255,0.44)',
+                        }
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-white dark:bg-dark-bg text-notion-text dark:text-dark-text min-h-screen font-sans transition-colors duration-200">
+
+    <div class="max-w-7xl mx-auto px-5 sm:px-8 py-6 flex flex-col gap-10">
+
+        <!-- Header -->
+        <header class="flex items-center justify-between py-2">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md bg-notion-accent flex items-center justify-center text-white font-bold text-xs tracking-tight">
+                    FCU
+                </div>
+                <span class="text-base font-semibold tracking-tight">逢甲選課助手</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="favorites-toggle" aria-label="開啟收藏清單"
+                    class="relative p-2 rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150">
+                    <svg class="w-5 h-5 text-notion-text-secondary dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                    </svg>
+                    <span id="favorites-count"
+                        class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-notion-red text-white text-[10px] font-bold rounded-full flex items-center justify-center transform scale-0 transition-transform duration-200">0</span>
+                </button>
+                <button id="theme-toggle" aria-label="切換深色 / 淺色模式"
+                    class="p-2 rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150">
+                    <svg class="w-5 h-5 text-notion-text-secondary dark:text-dark-text-secondary dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    <svg class="w-5 h-5 text-dark-text-secondary hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Divider -->
+        <div class="border-t border-notion-border dark:border-dark-border -mt-4"></div>
+
+        <!-- Hero Section -->
+        <section class="pt-4 pb-2 flex flex-col items-center text-center">
+            <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.15] mb-4" style="letter-spacing:-0.025em">
+                找到專屬於你的<br/>理想課表
+            </h1>
+            <p class="text-base sm:text-lg text-notion-text-secondary dark:text-dark-text-secondary max-w-3xl leading-relaxed mb-10">
+                整合校內外課程資料、難度指標與 AI 評估結果，幫助你快速挑選出符合目標的課程。
+            </p>
+
+            <!-- Search Bar -->
+            <div class="w-full max-w-3xl relative group z-20">
+                <form id="search-form"
+                    class="search-bar relative flex flex-col sm:flex-row gap-2">
+                    <div class="flex-1 relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <svg class="h-4 w-4 text-notion-text-secondary dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <input type="text" id="course-input" name="course"
+                            placeholder="搜尋課程名稱、教師或關鍵字..."
+                            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions"
+                            class="w-full pl-10 pr-4 py-2.5 bg-notion-bg-secondary dark:bg-dark-card border border-notion-border dark:border-dark-border rounded-lg focus:border-notion-accent dark:focus:border-notion-accent focus:ring-1 focus:ring-notion-accent/30 text-sm text-notion-text dark:text-dark-text placeholder-notion-text-secondary dark:placeholder-dark-text-secondary transition-colors duration-200 outline-none"
+                            autocomplete="off">
+                        <!-- Suggestions Dropdown -->
+                        <ul id="suggestions" role="listbox" aria-label="課程建議"
+                            class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-dark-card rounded-lg border border-notion-border dark:border-dark-border overflow-hidden hidden z-50 max-h-64 overflow-y-auto shadow-sm">
+                        </ul>
+                    </div>
+                    <button type="submit"
+                        class="px-5 py-2.5 bg-notion-accent hover:bg-[#2899c8] text-white text-sm font-medium rounded-lg transition-colors duration-150 whitespace-nowrap">
+                        搜尋
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Filters & Context -->
+        <section class="w-full">
+            <div class="bg-notion-bg-secondary dark:bg-dark-card rounded-lg border border-notion-border dark:border-dark-border p-5 sm:p-6">
+                <div class="flex flex-col gap-5">
+                    <!-- User Context -->
+                    <div class="bg-notion-bg-secondary dark:bg-dark-bg-secondary rounded-lg p-3.5 border border-notion-border dark:border-dark-border">
+                        <label for="user-context"
+                            class="flex items-center gap-1.5 text-sm font-medium text-notion-accent mb-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            背景補充說明
+                            <span class="text-notion-text-secondary dark:text-dark-text-secondary font-normal text-xs">— 填寫後才能使用 AI 評估</span></label>
+                        <textarea id="user-context" rows="2"
+                            placeholder="例如：我是資工系大三學生，想找一門可以練習英文口說的通識課..."
+                            class="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border focus:border-notion-accent dark:focus:border-notion-accent focus:ring-1 focus:ring-notion-accent/30 transition-colors duration-200 resize-none text-sm text-notion-text dark:text-dark-text placeholder-notion-text-secondary dark:placeholder-dark-text-secondary outline-none"></textarea>
+                    </div>
+
+                    <!-- Advanced Filters Toggle -->
+                    <details class="group" id="filter-panel">
+                        <summary
+                            class="flex items-center gap-1.5 cursor-pointer text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:text-notion-text dark:hover:text-dark-text font-medium select-none transition-colors duration-150">
+                            <svg class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <span>進階篩選</span>
+                        </summary>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5 pt-5 border-t border-notion-border dark:border-dark-border">
+                            <!-- Difficulty -->
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">評分範圍</label>
+                                <div class="flex items-center gap-2">
+                                    <select id="min-difficulty"
+                                        class="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border text-sm outline-none focus:border-notion-accent">
+                                        <option value="">不限</option>
+                                        <option value="1">最低 1</option>
+                                        <option value="2">最低 2</option>
+                                        <option value="3">最低 3</option>
+                                        <option value="4">最低 4</option>
+                                        <option value="5">最低 5</option>
+                                    </select>
+                                    <span class="text-notion-text-secondary text-xs">~</span>
+                                    <select id="max-difficulty"
+                                        class="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border text-sm outline-none focus:border-notion-accent">
+                                        <option value="">不限</option>
+                                        <option value="1">最高 1</option>
+                                        <option value="2">最高 2</option>
+                                        <option value="3">最高 3</option>
+                                        <option value="4">最高 4</option>
+                                        <option value="5">最高 5</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Score -->
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">推薦分數下限(限校務系統使用)</label>
+                                <select id="min-score"
+                                    class="w-full px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border text-sm outline-none focus:border-notion-accent">
+                                    <option value="">不限</option>
+                                    <option value="60">60 分以上</option>
+                                    <option value="70">70 分以上</option>
+                                    <option value="80">80 分以上</option>
+                                    <option value="90">90 分以上</option>
+                                </select>
+                            </div>
+
+                            <!-- Sort -->
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">排序依據</label>
+                                <select id="sort-select"
+                                    class="w-full px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border text-sm outline-none focus:border-notion-accent">
+                                    <option value="course">課程名稱（筆畫排序）</option>
+                                    <option value="teacher">教師名稱（筆畫排序）</option>
+                                    <option value="score">評分（由高到低）</option>
+                                </select>
+                            </div>
+
+                            <!-- Tags -->
+                            <div class="md:col-span-3 space-y-1.5">
+                                <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">熱門標籤</label>
+                                <div id="tag-filter-container" class="flex flex-wrap gap-1.5">
+                                    <span class="text-sm text-notion-text-secondary">載入中...</span>
+                                </div>
+                            </div>
+
+                            <!-- Sources -->
+                            <div class="md:col-span-3 space-y-1.5">
+                                <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">資料來源</label>
+                                <div id="source-filter-container" class="flex flex-wrap gap-1.5"></div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="md:col-span-3 flex justify-end gap-2 pt-3">
+                                <button type="button" id="reset-filters"
+                                    class="px-3.5 py-1.5 text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:text-notion-text dark:hover:text-dark-text hover:bg-notion-bg-hover dark:hover:bg-dark-border rounded-md transition-colors duration-150">清除重置</button>
+                                <button type="button" id="apply-filters"
+                                    class="px-4 py-1.5 bg-notion-text dark:bg-dark-text text-white dark:text-dark-bg text-sm font-medium rounded-md hover:opacity-90 transition-opacity duration-150">套用篩選</button>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- Weekly Planner -->
+        <section class="w-full">
+            <div class="bg-notion-bg-secondary dark:bg-dark-card rounded-lg border border-notion-border dark:border-dark-border p-5 sm:p-6">
+                <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-1">
+                        <h2 class="text-xl font-semibold tracking-tight">課表規劃專區</h2>
+                        <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary">
+                            上傳課表 PDF，輸入目標學分後可自動排出建議課表；分析後可手動增減課程。
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-2">
+                            <label class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">上傳課表 PDF</label>
+                            <input id="planner-file" type="file" accept=".pdf,application/pdf" class="hidden" />
+                            <div class="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border">
+                                <button type="button" id="planner-file-btn"
+                                    onclick="document.getElementById('planner-file').click()"
+                                    class="px-2 py-0.5 text-sm rounded border border-notion-border dark:border-dark-border bg-notion-bg-hover dark:bg-dark-border hover:opacity-80 transition-colors duration-150 shrink-0">
+                                    選擇檔案
+                                </button>
+                                <span id="planner-file-name" class="text-sm text-notion-text-secondary dark:text-dark-text-secondary truncate">未選擇任何檔案</span>
+                            </div>
+                            <span id="planner-uploaded-credits" class="hidden text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="planner-target-credits" class="text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">目標學分 <span class="text-red-400">*</span></label>
+                            <input id="planner-target-credits" type="number" min="1" max="40" step="1"
+                                placeholder="請輸入目標學分（例如 18）"
+                                onwheel="this.blur()"
+                                class="w-full px-3 py-2 rounded-lg bg-white dark:bg-dark-bg border border-notion-border dark:border-dark-border text-sm outline-none focus:border-notion-accent" />
+                        </div>
+                    </div>
+
+                    <details class="group">
+                        <summary class="cursor-pointer text-xs text-notion-text-secondary dark:text-dark-text-secondary">PDF 辨識說明（點擊展開）</summary>
+                        <div class="mt-2 text-xs text-notion-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                            系統會自動從課表 PDF 辨識課名、教師、學分與節次。若節次未被完整辨識，仍可先產生建議課表並手動調整。
+                        </div>
+                    </details>
+
+                    <!-- Dynamic Timetable -->
+                    <div id="planner-timetable-wrap" class="hidden">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs font-semibold text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">動態課表</h3>
+                            <span id="planner-timetable-legend" class="text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="planner-timetable" class="w-full text-xs border-collapse select-none">
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="planner-generate"
+                            class="px-4 py-2 bg-notion-accent hover:bg-[#2899c8] text-white text-sm font-medium rounded-md transition-colors duration-150">
+                            產生建議課表
+                        </button>
+                    </div>
+
+                    <div id="planner-summary" class="hidden text-sm text-notion-text-secondary dark:text-dark-text-secondary"></div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="rounded-lg border border-notion-border dark:border-dark-border bg-white dark:bg-dark-bg p-4">
+                            <h3 class="text-sm font-semibold mb-3">目前建議課表(含固定學分)
+                            <div id="planner-selected-list" class="space-y-2"></div>
+                        </div>
+                        <div class="rounded-lg border border-notion-border dark:border-dark-border bg-white dark:bg-dark-bg p-4">
+                            <h3 class="text-sm font-semibold mb-3">可加入課程</h3>
+                            <div id="planner-candidate-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="w-full pb-16">
+            <div id="results-summary" class="hidden mb-4 text-sm text-notion-text-secondary dark:text-dark-text-secondary"></div>
+            <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <!-- Course Cards will be injected here -->
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Favorites Panel (Slide-over) -->
+    <div id="favorites-backdrop"
+        class="fixed inset-0 bg-black/30 dark:bg-black/50 z-40 hidden transition-opacity duration-200 opacity-0">
+    </div>
+    <aside id="favorites-panel"
+        class="fixed top-0 right-0 h-full w-full sm:w-96 bg-white dark:bg-dark-bg z-50 transform translate-x-full transition-transform duration-200 flex flex-col border-l border-notion-border dark:border-dark-border">
+        <div class="p-5 border-b border-notion-border dark:border-dark-border flex items-center justify-between">
+            <h2 class="text-base font-semibold">收藏清單</h2>
+            <button id="close-favorites" aria-label="關閉收藏清單"
+                class="p-1.5 rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150 text-notion-text-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="px-5 py-3 bg-notion-bg-secondary dark:bg-dark-bg-secondary border-b border-notion-border dark:border-dark-border flex justify-between items-center">
+            <span id="favorites-summary" class="text-xs text-notion-text-secondary dark:text-dark-text-secondary">0 門課程</span>
+            <button id="clear-favorites" class="text-xs text-notion-red hover:underline font-medium">清空</button>
+        </div>
+        <div id="favorites-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- Favorite items -->
+        </div>
+    </aside>
+
+    <!-- Floating Timetable -->
+    <div id="floating-timetable"
+        class="fixed bottom-6 left-6 z-40 hidden max-w-xs w-72 bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border rounded-xl shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-2 bg-notion-bg-secondary dark:bg-dark-bg-secondary border-b border-notion-border dark:border-dark-border">
+            <span class="text-xs font-semibold text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">動態課表</span>
+            <button id="floating-timetable-close" type="button" class="text-notion-text-secondary dark:text-dark-text-secondary hover:text-notion-text dark:hover:text-dark-text text-sm leading-none">✕</button>
+        </div>
+        <div class="overflow-auto max-h-72 p-1">
+            <table id="floating-timetable-table" class="w-full text-xs border-collapse"></table>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
+    </div>
+
+    <!-- Back to Top -->
+    <button id="back-to-top" aria-label="回到頂部"
+        class="fixed bottom-6 right-6 w-9 h-9 bg-notion-text dark:bg-dark-text text-white dark:text-dark-bg rounded-md flex items-center justify-center text-sm hover:opacity-80 transition-all duration-200 opacity-0 invisible z-30">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+        </svg>
+    </button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="config.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
