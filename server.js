@@ -6,8 +6,55 @@ import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
+import pg from "pg";
+const { Pool } = pg;
 
 dotenv.config();
+
+// PostgreSQL 連線
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("railway.internal") ? false : { rejectUnauthorized: false },
+});
+
+// 建立資料表（若不存在）
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      nid TEXT PRIMARY KEY,
+      name TEXT,
+      unit_name TEXT,
+      dept_name TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS favorites (
+      id SERIAL PRIMARY KEY,
+      nid TEXT REFERENCES users(nid),
+      course_id TEXT,
+      course_name TEXT,
+      added_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS ai_analyses (
+      id SERIAL PRIMARY KEY,
+      nid TEXT REFERENCES users(nid),
+      course_id TEXT,
+      course_name TEXT,
+      user_context TEXT,
+      result TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS planners (
+      id SERIAL PRIMARY KEY,
+      nid TEXT REFERENCES users(nid),
+      name TEXT,
+      courses JSONB DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  console.log("DB tables ready");
+}
+initDB().catch(console.error);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -175,6 +222,12 @@ app.post("/api/analyze", requireAuth, analyzeRateLimiter, async (req, res) => {
   try {
     const content = await callAI(prompt, { temperature: 0.6 });
     if (!content) return res.status(502).json({ error: "AI 未回傳任何分析內容。" });
+    // 存 AI 分析紀錄
+    pool.query(
+      "INSERT INTO ai_analyses (nid, course_id, course_name, user_context, result) VALUES ($1,$2,$3,$4,$5)",
+      [req.user.nid, courseName, courseName, userContext, content]
+    ).catch(console.error);
+
     return res.json({ analysis: content });
   } catch (error) {
     console.error("呼叫 AI 時發生錯誤：", error);
@@ -279,6 +332,14 @@ app.post("/api/auth/nid-callback", async (req, res) => {
       dept_name: userInfo.dept_name || "",
     };
 
+    // 建立或更新 users 資料
+    await pool.query(
+      `INSERT INTO users (nid, name, unit_name, dept_name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (nid) DO UPDATE SET name=$2, unit_name=$3, dept_name=$4`,
+      [user.nid, user.name, user.unit_name, user.dept_name]
+    );
+
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
     return res.json({ success: true, token, user });
   } catch (err) {
@@ -297,6 +358,73 @@ app.get("/api/auth/me", (req, res) => {
   } catch {
     return res.status(401).json({ error: "Token 無效或已過期，請重新登入。" });
   }
+});
+
+// ── 收藏 API ──────────────────────────────────────────────
+// 取得收藏列表
+app.get("/api/favorites", requireAuth, async (req, res) => {
+  const rows = await pool.query("SELECT * FROM favorites WHERE nid=$1 ORDER BY added_at DESC", [req.user.nid]);
+  res.json({ favorites: rows.rows });
+});
+
+// 新增收藏
+app.post("/api/favorites", requireAuth, async (req, res) => {
+  const { course_id, course_name } = req.body || {};
+  if (!course_id) return res.status(400).json({ error: "缺少 course_id。" });
+  const exists = await pool.query("SELECT id FROM favorites WHERE nid=$1 AND course_id=$2", [req.user.nid, course_id]);
+  if (exists.rows.length) return res.json({ message: "已在收藏中。" });
+  const row = await pool.query(
+    "INSERT INTO favorites (nid, course_id, course_name) VALUES ($1,$2,$3) RETURNING *",
+    [req.user.nid, course_id, course_name]
+  );
+  res.json({ favorite: row.rows[0] });
+});
+
+// 刪除收藏
+app.delete("/api/favorites/:course_id", requireAuth, async (req, res) => {
+  await pool.query("DELETE FROM favorites WHERE nid=$1 AND course_id=$2", [req.user.nid, req.params.course_id]);
+  res.json({ success: true });
+});
+
+// ── AI 分析紀錄 API ───────────────────────────────────────
+// 取得紀錄
+app.get("/api/analyses", requireAuth, async (req, res) => {
+  const rows = await pool.query("SELECT * FROM ai_analyses WHERE nid=$1 ORDER BY created_at DESC LIMIT 50", [req.user.nid]);
+  res.json({ analyses: rows.rows });
+});
+
+// ── 排課計畫 API ──────────────────────────────────────────
+// 取得所有計畫
+app.get("/api/planners", requireAuth, async (req, res) => {
+  const rows = await pool.query("SELECT * FROM planners WHERE nid=$1 ORDER BY updated_at DESC", [req.user.nid]);
+  res.json({ planners: rows.rows });
+});
+
+// 新增計畫
+app.post("/api/planners", requireAuth, async (req, res) => {
+  const { name, courses } = req.body || {};
+  if (!name) return res.status(400).json({ error: "請提供計畫名稱。" });
+  const row = await pool.query(
+    "INSERT INTO planners (nid, name, courses) VALUES ($1,$2,$3) RETURNING *",
+    [req.user.nid, name, JSON.stringify(courses || [])]
+  );
+  res.json({ planner: row.rows[0] });
+});
+
+// 更新計畫
+app.put("/api/planners/:id", requireAuth, async (req, res) => {
+  const { name, courses } = req.body || {};
+  await pool.query(
+    "UPDATE planners SET name=COALESCE($1,name), courses=COALESCE($2,courses), updated_at=NOW() WHERE id=$3 AND nid=$4",
+    [name, courses ? JSON.stringify(courses) : null, req.params.id, req.user.nid]
+  );
+  res.json({ success: true });
+});
+
+// 刪除計畫
+app.delete("/api/planners/:id", requireAuth, async (req, res) => {
+  await pool.query("DELETE FROM planners WHERE id=$1 AND nid=$2", [req.params.id, req.user.nid]);
+  res.json({ success: true });
 });
 
 app.use(express.static(STATIC_DIR));
