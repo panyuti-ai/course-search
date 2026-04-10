@@ -305,8 +305,10 @@ app.get("/callback", (req, res) => {
   res.sendFile(path.resolve(STATIC_DIR, "callback.html"));
 });
 
-app.post("/callback", (req, res) => {
-  res.sendFile(path.resolve(STATIC_DIR, "callback.html"));
+app.post("/callback", express.urlencoded({ extended: false }), (req, res) => {
+  const { status, message, user_code } = req.body || {};
+  const qs = new URLSearchParams({ status: status || '', message: message || '', user_code: user_code || '' }).toString();
+  res.redirect(`/callback?${qs}`);
 });
 
 app.use((req, res) => {
