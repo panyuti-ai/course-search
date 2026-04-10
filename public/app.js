@@ -388,28 +388,24 @@
         localStorage.setItem(STORAGE_KEY_THEME, isDark ? 'dark' : 'light');
     }
 
-    function loadFavorites() {
+    async function loadFavorites() {
         state.favorites.clear();
         try {
-            const raw = localStorage.getItem(STORAGE_KEY_FAVORITES);
-            if (!raw) return;
-            const storedIds = JSON.parse(raw);
-            if (!Array.isArray(storedIds)) return;
-            storedIds.forEach((id) => {
-                const course = state.coursesById.get(id);
-                if (course) {
-                    state.favorites.set(id, course);
-                }
+            const res = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/favorites');
+            if (!res.ok) return;
+            const data = await res.json();
+            (data.favorites || []).forEach((fav) => {
+                const course = state.coursesById.get(fav.course_id);
+                if (course) state.favorites.set(fav.course_id, course);
             });
         } catch (error) {
-            console.warn('Failed to restore favorites:', error);
+            console.warn('Failed to load favorites from server:', error);
         }
         updateFavoritesUI();
     }
 
     function saveFavorites() {
-        const ids = Array.from(state.favorites.keys());
-        localStorage.setItem(STORAGE_KEY_FAVORITES, JSON.stringify(ids));
+        // 收藏/取消收藏由 toggleFavorite 直接呼叫 API，這裡保留空實作
     }
 
     function attachEvents() {
@@ -472,6 +468,20 @@
         }
         if (elements.plannerGenerate) {
             elements.plannerGenerate.addEventListener('click', generatePlannerRecommendation);
+        }
+        const plannerSaveBtn = document.getElementById('planner-save-db');
+        if (plannerSaveBtn) {
+            plannerSaveBtn.addEventListener('click', async () => {
+                const courses = Array.from(state.planner.selected?.values() || []);
+                if (!courses.length) { alert('目前沒有選課，請先產生建議課表。'); return; }
+                const name = prompt('請輸入計畫名稱：', `排課計畫 ${new Date().toLocaleDateString('zh-TW')}`);
+                if (!name) return;
+                plannerSaveBtn.textContent = '儲存中...';
+                plannerSaveBtn.disabled = true;
+                await window.savePlannerToDB?.(name, courses);
+                plannerSaveBtn.textContent = '已儲存！';
+                setTimeout(() => { plannerSaveBtn.textContent = '儲存計畫'; plannerSaveBtn.disabled = false; }, 2000);
+            });
         }
         if (elements.plannerReset) {
             elements.plannerReset.addEventListener('click', resetPlannerState);
@@ -1371,12 +1381,18 @@ ${scoreLine}
     }
 
     function toggleFavorite(course) {
-        if (state.favorites.has(course.id)) {
+        const isFav = state.favorites.has(course.id);
+        if (isFav) {
             state.favorites.delete(course.id);
+            (window.authFetch || fetch)(`${window.API_BASE_URL || ''}/api/favorites/${encodeURIComponent(course.id)}`, { method: 'DELETE' }).catch(console.warn);
         } else {
             state.favorites.set(course.id, course);
+            (window.authFetch || fetch)(`${window.API_BASE_URL || ''}/api/favorites`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ course_id: course.id, course_name: course.course }),
+            }).catch(console.warn);
         }
-        saveFavorites();
         updateFavoritesUI();
     }
 
@@ -4099,6 +4115,35 @@ ${scoreLine}
         renderAuth();
         showLoginWall();
     });
+
+    // 儲存排課計畫到 DB
+    window.savePlannerToDB = async function(name, courses) {
+        if (!getToken()) return;
+        try {
+            const res = await window.authFetch(`${API_BASE}/api/planners`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, courses }),
+            });
+            const data = await res.json();
+            return data.planner;
+        } catch (e) {
+            console.warn('儲存排課計畫失敗', e);
+        }
+    };
+
+    // 載入所有排課計畫
+    window.loadPlannersFromDB = async function() {
+        if (!getToken()) return [];
+        try {
+            const res = await window.authFetch(`${API_BASE}/api/planners`);
+            const data = await res.json();
+            return data.planners || [];
+        } catch (e) {
+            console.warn('載入排課計畫失敗', e);
+            return [];
+        }
+    };
 
     // 頁面載入時檢查是否已登入
     if (!getUser() || !getToken()) {
