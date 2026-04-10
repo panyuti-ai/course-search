@@ -302,11 +302,11 @@ app.get("/api/auth/me", (req, res) => {
 app.use(express.static(STATIC_DIR));
 
 app.get("/callback", (req, res) => {
-  res.sendFile(path.join(__dirname, STATIC_DIR, "callback.html"));
+  res.sendFile(path.resolve(STATIC_DIR, "callback.html"));
 });
 
 app.post("/callback", (req, res) => {
-  res.sendFile(path.join(__dirname, STATIC_DIR, "callback.html"));
+  res.sendFile(path.resolve(STATIC_DIR, "callback.html"));
 });
 
 app.use((req, res) => {
