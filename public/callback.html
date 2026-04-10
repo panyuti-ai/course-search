@@ -42,8 +42,8 @@
           showError(data.error || '登入失敗，請稍後再試。');
           return;
         }
-        localStorage.setItem('nid_token', data.token);
-        localStorage.setItem('nid_user', JSON.stringify(data.user));
+        sessionStorage.setItem('nid_token', data.token);
+        sessionStorage.setItem('nid_user', JSON.stringify(data.user));
         document.getElementById('status-icon').textContent = '✅';
         document.getElementById('status-text').textContent = `歡迎，${data.user.name}！正在跳轉...`;
         setTimeout(() => { window.location.href = '/'; }, 1000);

@@ -4029,9 +4029,9 @@ ${scoreLine}
 (() => {
     const API_BASE = window.API_BASE_URL || '';
 
-    function getToken() { return localStorage.getItem('nid_token'); }
+    function getToken() { return sessionStorage.getItem('nid_token'); }
     function getUser() {
-        try { return JSON.parse(localStorage.getItem('nid_user')); } catch { return null; }
+        try { return JSON.parse(sessionStorage.getItem('nid_user')); } catch { return null; }
     }
 
     // 讓全站 fetch 可以帶 JWT（掛到 window 供其他模組使用）
@@ -4094,8 +4094,8 @@ ${scoreLine}
 
     document.getElementById('nid-login-btn')?.addEventListener('click', startNidLogin);
     document.getElementById('nid-logout-btn')?.addEventListener('click', () => {
-        localStorage.removeItem('nid_token');
-        localStorage.removeItem('nid_user');
+        sessionStorage.removeItem('nid_token');
+        sessionStorage.removeItem('nid_user');
         renderAuth();
         showLoginWall();
     });
