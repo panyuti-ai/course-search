@@ -1519,6 +1519,7 @@ ${scoreLine}
             courses.forEach(c => {
                 if (c && c.id) state.planner.selected.set(c.id, c);
             });
+            state.planner.hasPlan = true;
             renderPlanner();
             // 捲動到排課區塊
             elements.plannerSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
