@@ -2513,7 +2513,7 @@ ${scoreLine}
         let aiKeywords = [];
         let aiAvailable = true;
         try {
-            const resp = await fetch((window.API_BASE_URL || '') + '/api/planner-keywords', {
+            const resp = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/planner-keywords', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userContext })
@@ -3809,7 +3809,7 @@ ${scoreLine}
         button.textContent = '評估中...';
 
         try {
-            const response = await fetch((window.API_BASE_URL || '') + '/api/analyze', {
+            const response = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -4023,4 +4023,86 @@ ${scoreLine}
 
         return Boolean(q || tags || sources || params.get('minDiff') || params.get('maxDiff') || params.get('minScore'));
     }
+})();
+
+// NID 登入模組
+(() => {
+    const API_BASE = window.API_BASE_URL || '';
+
+    function getToken() { return localStorage.getItem('nid_token'); }
+    function getUser() {
+        try { return JSON.parse(localStorage.getItem('nid_user')); } catch { return null; }
+    }
+
+    // 讓全站 fetch 可以帶 JWT（掛到 window 供其他模組使用）
+    window.authFetch = function(url, options = {}) {
+        const token = getToken();
+        if (token) {
+            options.headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` };
+        }
+        return fetch(url, options);
+    };
+
+    function showLoginWall() {
+        // 遮住整個頁面內容，強制登入
+        const wall = document.createElement('div');
+        wall.id = 'login-wall';
+        wall.className = 'fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-dark-bg';
+        wall.innerHTML = `
+            <div class="text-center max-w-sm px-6">
+                <div class="w-14 h-14 rounded-xl bg-notion-accent flex items-center justify-center text-white font-bold text-lg mx-auto mb-5">FCU</div>
+                <h1 class="text-xl font-semibold mb-2">逢甲選課助手</h1>
+                <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary mb-6">
+                    請使用逢甲 NID 帳號登入，以記錄你的選課紀錄。
+                </p>
+                <button id="wall-login-btn"
+                    class="w-full py-2.5 rounded-lg bg-notion-accent text-white font-medium hover:opacity-90 transition-opacity">
+                    使用逢甲 NID 登入
+                </button>
+            </div>`;
+        document.body.appendChild(wall);
+        document.getElementById('wall-login-btn').addEventListener('click', startNidLogin);
+    }
+
+    function renderAuth() {
+        const loginBtn = document.getElementById('nid-login-btn');
+        const userInfo = document.getElementById('nid-user-info');
+        const logoutBtn = document.getElementById('nid-logout-btn');
+        const user = getUser();
+
+        if (user) {
+            loginBtn.classList.add('hidden');
+            userInfo.textContent = `${user.name}（${user.unit_name || user.dept_name || user.type}）`;
+            userInfo.classList.remove('hidden');
+            logoutBtn.classList.remove('hidden');
+        } else {
+            loginBtn.classList.remove('hidden');
+            userInfo.classList.add('hidden');
+            logoutBtn.classList.add('hidden');
+        }
+    }
+
+    async function startNidLogin() {
+        try {
+            const res = await fetch(`${API_BASE}/api/auth/nid-url`);
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+        } catch {
+            alert('無法取得登入網址，請稍後再試。');
+        }
+    }
+
+    document.getElementById('nid-login-btn')?.addEventListener('click', startNidLogin);
+    document.getElementById('nid-logout-btn')?.addEventListener('click', () => {
+        localStorage.removeItem('nid_token');
+        localStorage.removeItem('nid_user');
+        renderAuth();
+        showLoginWall();
+    });
+
+    // 頁面載入時檢查是否已登入
+    if (!getUser() || !getToken()) {
+        showLoginWall();
+    }
+    renderAuth();
 })();

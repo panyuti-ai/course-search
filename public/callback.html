@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>逢甲選課助手 — 登入中</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="config.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center font-sans">
+  <div class="text-center">
+    <div id="status-icon" class="text-5xl mb-4">⏳</div>
+    <p id="status-text" class="text-gray-600 text-lg">正在驗證登入...</p>
+  </div>
+
+  <script>
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('status');
+      const userCode = params.get('user_code');
+      const API_BASE = window.API_BASE_URL || '';
+
+      function showError(msg) {
+        document.getElementById('status-icon').textContent = '❌';
+        document.getElementById('status-text').textContent = msg;
+        setTimeout(() => { window.location.href = '/'; }, 3000);
+      }
+
+      if (status !== '200' || !userCode) {
+        showError('登入失敗或您已取消授權，3 秒後返回首頁...');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/nid-callback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, user_code: userCode }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.token) {
+          showError(data.error || '登入失敗，請稍後再試。');
+          return;
+        }
+        localStorage.setItem('nid_token', data.token);
+        localStorage.setItem('nid_user', JSON.stringify(data.user));
+        document.getElementById('status-icon').textContent = '✅';
+        document.getElementById('status-text').textContent = `歡迎，${data.user.name}！正在跳轉...`;
+        setTimeout(() => { window.location.href = '/'; }, 1000);
+      } catch (e) {
+        showError('網路錯誤，請稍後再試。');
+      }
+    })();
+  </script>
+</body>
+</html>

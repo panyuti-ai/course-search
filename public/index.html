@@ -71,6 +71,18 @@
                 <span class="text-base font-semibold tracking-tight">逢甲選課助手</span>
             </div>
             <div class="flex items-center gap-2">
+                <!-- NID 登入區塊 -->
+                <div id="auth-area" class="flex items-center gap-2">
+                  <button id="nid-login-btn"
+                    class="px-3 py-1.5 text-sm font-medium rounded-md bg-notion-accent text-white hover:opacity-90 transition-opacity hidden">
+                    逢甲 NID 登入
+                  </button>
+                  <span id="nid-user-info" class="text-sm text-notion-text-secondary dark:text-dark-text-secondary hidden"></span>
+                  <button id="nid-logout-btn"
+                    class="px-2 py-1 text-xs rounded-md border border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-card hidden">
+                    登出
+                  </button>
+                </div>
                 <button id="favorites-toggle" aria-label="開啟收藏清單"
                     class="relative p-2 rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150">
                     <svg class="w-5 h-5 text-notion-text-secondary dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">

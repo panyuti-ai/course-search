@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
@@ -101,7 +102,21 @@ const analyzeRateLimiter = rateLimit({
   message: { error: "請求過於頻繁，請稍後再試。" },
 });
 
-app.post("/api/analyze", analyzeRateLimiter, async (req, res) => {
+// JWT 驗證 middleware
+function requireAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "請先登入逢甲 NID 帳號。" });
+  }
+  try {
+    req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: "登入已過期，請重新登入。" });
+  }
+}
+
+app.post("/api/analyze", requireAuth, analyzeRateLimiter, async (req, res) => {
   if (!getActiveApiKey()) {
     return res.status(503).json({ error: "伺服器尚未設定 AI API key，請稍後再試。" });
   }
@@ -168,7 +183,7 @@ app.post("/api/analyze", analyzeRateLimiter, async (req, res) => {
 });
 
 // 從背景說明提取課程關鍵字，供前端排課評分使用
-app.post("/api/planner-keywords", analyzeRateLimiter, async (req, res) => {
+app.post("/api/planner-keywords", requireAuth, analyzeRateLimiter, async (req, res) => {
   if (!getActiveApiKey()) {
     return res.status(503).json({ error: "伺服器尚未設定 AI API key。" });
   }
@@ -215,20 +230,73 @@ app.post("/api/planner-keywords", analyzeRateLimiter, async (req, res) => {
   }
 });
 
-// 假的 NID 登入 endpoint（之後會換成逢甲大學 NID OAuth）
-// TODO: 替換成真正的 NID OAuth 流程
-app.post("/api/auth/login", (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) {
-    return res.status(400).json({ error: "請提供帳號與密碼。" });
+// NID OAuth 設定
+const NID_CLIENT_ID = process.env.NID_CLIENT_ID || "639113396662.9a12201d531d490f870468b48ca9ce99.fcu-coursesearch.com";
+const NID_AUTH_URL = "https://opendata.fcu.edu.tw/fcuOauth/Auth.aspx";
+const NID_API_BASE = "https://opendata.fcu.edu.tw/fcuapi/api";
+const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
+
+// 取得 NID 登入跳轉 URL
+app.get("/api/auth/nid-url", (req, res) => {
+  const callbackUrl = process.env.NID_CALLBACK_URL || "https://fcu-coursesearch.com/callback";
+  const authUrl = `${NID_AUTH_URL}?client_id=${encodeURIComponent(NID_CLIENT_ID)}&client_url=${encodeURIComponent(callbackUrl)}`;
+  return res.json({ url: authUrl });
+});
+
+// NID callback：前端把 user_code 傳過來，後端在 5 秒內換取使用者資料
+app.post("/api/auth/nid-callback", async (req, res) => {
+  const { user_code, status } = req.body || {};
+
+  if (String(status) !== "200") {
+    return res.status(401).json({ error: "NID 登入失敗或使用者拒絕授權。" });
   }
-  // 假登入：任何帳密都回傳成功，實際整合 NID OAuth 時移除此段
-  return res.json({
-    success: true,
-    user: { username, displayName: username },
-    token: "mock-token-" + Date.now(),
-    note: "這是假的登入，尚未整合逢甲 NID OAuth。",
-  });
+  if (!user_code) {
+    return res.status(400).json({ error: "缺少 user_code。" });
+  }
+
+  try {
+    // 同時呼叫兩支 API（必須在 5 秒內完成）
+    const [loginRes, infoRes] = await Promise.all([
+      fetch(`${NID_API_BASE}/GetLoginUser?client_id=${encodeURIComponent(NID_CLIENT_ID)}&user_code=${encodeURIComponent(user_code)}`),
+      fetch(`${NID_API_BASE}/GetUserInfo?client_id=${encodeURIComponent(NID_CLIENT_ID)}&user_code=${encodeURIComponent(user_code)}`),
+    ]);
+
+    const loginData = await loginRes.json();
+    const infoData = await infoRes.json();
+
+    const loginUser = loginData?.UserInfo?.[0];
+    if (!loginUser || String(loginUser.status) !== "1") {
+      return res.status(401).json({ error: "NID 驗證失敗，user_code 無效或已過期。" });
+    }
+
+    const userInfo = infoData?.UserInfo?.[0] || {};
+    const user = {
+      nid: loginUser.stu_id || userInfo.id,
+      name: userInfo.name || loginUser.stu_id,
+      type: userInfo.type || "學生",
+      classname: userInfo.classname || "",
+      unit_name: userInfo.unit_name || "",
+      dept_name: userInfo.dept_name || "",
+    };
+
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ success: true, token, user });
+  } catch (err) {
+    console.error("NID callback error:", err);
+    return res.status(500).json({ error: "與 NID 伺服器通訊失敗，請稍後再試。" });
+  }
+});
+
+// 驗證目前登入狀態
+app.get("/api/auth/me", (req, res) => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "未登入。" });
+  try {
+    const user = jwt.verify(auth.slice(7), JWT_SECRET);
+    return res.json({ user });
+  } catch {
+    return res.status(401).json({ error: "Token 無效或已過期，請重新登入。" });
+  }
 });
 
 app.use(express.static(STATIC_DIR));
