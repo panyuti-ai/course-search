@@ -305,6 +305,10 @@ app.get("/callback", (req, res) => {
   res.sendFile(path.join(__dirname, STATIC_DIR, "callback.html"));
 });
 
+app.post("/callback", (req, res) => {
+  res.sendFile(path.join(__dirname, STATIC_DIR, "callback.html"));
+});
+
 app.use((req, res) => {
   res.status(404).json({ error: "Not Found" });
 });
