@@ -480,7 +480,7 @@
                 plannerSaveBtn.disabled = true;
                 await window.savePlannerToDB?.(name, courses);
                 plannerSaveBtn.textContent = '已儲存！';
-                setTimeout(() => { plannerSaveBtn.textContent = '儲存計畫'; plannerSaveBtn.disabled = false; }, 2000);
+                setTimeout(() => { plannerSaveBtn.textContent = '儲存課表'; plannerSaveBtn.disabled = false; }, 2000);
             });
         }
         if (elements.plannerReset) {
@@ -1511,6 +1511,18 @@ ${scoreLine}
             state.planner.targetCredits = targetCredits;
         }
         renderPlanner();
+
+        // 供課表選擇彈窗使用：載入已儲存的課表
+        window.__plannerLoadCourses = function(courses) {
+            if (!Array.isArray(courses)) return;
+            state.planner.selected = new Map();
+            courses.forEach(c => {
+                if (c && c.id) state.planner.selected.set(c.id, c);
+            });
+            renderPlanner();
+            // 捲動到排課區塊
+            elements.plannerSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
     }
 
     async function handlePlannerFileUpload(event) {
@@ -4145,9 +4157,49 @@ ${scoreLine}
         }
     };
 
+    // 顯示課表選擇彈窗
+    async function showPlannerPicker() {
+        const planners = await window.loadPlannersFromDB?.() || [];
+        if (!planners.length) return; // 沒有舊課表就不顯示
+
+        const modal = document.createElement('div');
+        modal.id = 'planner-picker';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+                <h2 class="text-base font-semibold mb-1">繼續上次的課表</h2>
+                <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary mb-4">選擇一個課表繼續，或略過從頭開始。</p>
+                <div class="space-y-2 max-h-60 overflow-y-auto mb-4" id="planner-picker-list"></div>
+                <button id="planner-picker-skip" class="w-full py-2 text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:underline">略過，從頭開始</button>
+            </div>`;
+        document.body.appendChild(modal);
+
+        const list = document.getElementById('planner-picker-list');
+        planners.forEach(p => {
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left px-4 py-3 rounded-lg border border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors';
+            const date = new Date(p.updated_at).toLocaleDateString('zh-TW');
+            const count = Array.isArray(p.courses) ? p.courses.length : 0;
+            btn.innerHTML = `<div class="font-medium text-sm">${p.name}</div><div class="text-xs text-notion-text-secondary dark:text-dark-text-secondary mt-0.5">${date} · ${count} 門課</div>`;
+            btn.addEventListener('click', () => {
+                // 把課表載入到 planner state
+                if (window.__plannerLoadCourses) {
+                    window.__plannerLoadCourses(p.courses || []);
+                }
+                modal.remove();
+            });
+            list.appendChild(btn);
+        });
+
+        document.getElementById('planner-picker-skip').addEventListener('click', () => modal.remove());
+    }
+
     // 頁面載入時檢查是否已登入
     if (!getUser() || !getToken()) {
         showLoginWall();
+    } else {
+        // 已登入，延遲顯示課表選擇（等主程式載入完成）
+        setTimeout(showPlannerPicker, 1500);
     }
     renderAuth();
 })();
