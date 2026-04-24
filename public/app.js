@@ -197,8 +197,8 @@
         plannerUpdatedListenerBound = true;
 
         document.addEventListener('planner-updated', () => {
-        plannerAddButtonUpdaters.forEach((update) => update());
-    });
+            plannerAddButtonUpdaters.forEach((update) => update());
+        });
     }
 
     if (!elements.searchForm) {
