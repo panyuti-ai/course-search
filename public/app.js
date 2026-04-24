@@ -193,8 +193,8 @@
     let plannerUpdatedListenerBound = false;
 
     function ensurePlannerUpdatedListener() {
-    if (plannerUpdatedListenerBound) return;
-    plannerUpdatedListenerBound = true;
+        if (plannerUpdatedListenerBound) return;
+        plannerUpdatedListenerBound = true;
 
     document.addEventListener('planner-updated', () => {
         plannerAddButtonUpdaters.forEach((update) => update());
@@ -884,13 +884,11 @@
     }
 
     function renderResults(courses) {
-    const container = elements.searchResults;
-
-    plannerAddButtonUpdaters.clear();
-
-    container.innerHTML = '';
-    state.lastResults = courses;
-    state.displayedCount = 0;
+        const container = elements.searchResults;
+        plannerAddButtonUpdaters.clear();
+        container.innerHTML = '';
+        state.lastResults = courses;
+        state.displayedCount = 0;
 
         if (!courses.length) {
             const message = document.createElement('div');
