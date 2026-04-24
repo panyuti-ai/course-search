@@ -196,7 +196,7 @@
         if (plannerUpdatedListenerBound) return;
         plannerUpdatedListenerBound = true;
 
-    document.addEventListener('planner-updated', () => {
+        document.addEventListener('planner-updated', () => {
         plannerAddButtonUpdaters.forEach((update) => update());
     });
     }
