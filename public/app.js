@@ -189,6 +189,17 @@
         floatingTimetable: document.getElementById('floating-timetable'),
         floatingTimetableTable: document.getElementById('floating-timetable-table'),
     };
+    const plannerAddButtonUpdaters = new Set();
+    let plannerUpdatedListenerBound = false;
+
+    function ensurePlannerUpdatedListener() {
+    if (plannerUpdatedListenerBound) return;
+    plannerUpdatedListenerBound = true;
+
+    document.addEventListener('planner-updated', () => {
+        plannerAddButtonUpdaters.forEach((update) => update());
+    });
+    }
 
     if (!elements.searchForm) {
         return;
@@ -873,10 +884,13 @@
     }
 
     function renderResults(courses) {
-        const container = elements.searchResults;
-        container.innerHTML = '';
-        state.lastResults = courses;
-        state.displayedCount = 0;
+    const container = elements.searchResults;
+
+    plannerAddButtonUpdaters.clear();
+
+    container.innerHTML = '';
+    state.lastResults = courses;
+    state.displayedCount = 0;
 
         if (!courses.length) {
             const message = document.createElement('div');
@@ -1266,8 +1280,9 @@
             addToPlanBtn.textContent = '＋ 加入規劃';
         }
 
+        ensurePlannerUpdatedListener();
+        plannerAddButtonUpdaters.add(updateAddToPlanBtn);
         updateAddToPlanBtn();
-        document.addEventListener('planner-updated', updateAddToPlanBtn);
 
         addToPlanBtn.addEventListener('click', () => {
             if (!hasPdfUploaded()) {
