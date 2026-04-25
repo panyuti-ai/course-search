@@ -957,7 +957,7 @@
         return card;
     }
 
-    function createCardHeader(course) {  
+    function createCardHeader(course) {
         const header = document.createElement('div');
         header.className = 'flex flex-col gap-1.5';
 
@@ -980,9 +980,9 @@
         metaRow.className = 'flex flex-wrap items-center gap-2 text-sm text-black dark:text-white';
 
         if (course.teacher) {
-        const teacher = document.createElement('span');
-        teacher.textContent = course.teacher;
-        metaRow.appendChild(teacher);
+            const teacher = document.createElement('span');
+            teacher.textContent = course.teacher;
+            metaRow.appendChild(teacher);
         }
 
         if (course.semester) {
