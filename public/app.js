@@ -962,47 +962,44 @@
         header.className = 'flex flex-col gap-1.5';
 
         const title = document.createElement('h3');
-        title.className = 'text-base font-semibold leading-snug';
-        title.style.color = '#ffffff';
+        title.className = 'text-base font-semibold leading-snug text-black dark:text-white';
+
         if (course.selCode) {
             const codeSpan = document.createElement('span');
             codeSpan.className = 'font-mono mr-1.5';
-            codeSpan.style.color = '#ffffff';
             codeSpan.textContent = `[${course.selCode}]`;
             title.appendChild(codeSpan);
             title.appendChild(document.createTextNode(course.course));
         } else {
             title.textContent = course.course;
         }
+
         header.appendChild(title);
 
         const metaRow = document.createElement('div');
-        metaRow.className = 'flex flex-wrap items-center gap-2 text-sm';
-        metaRow.style.color = '#ffffff';
+        metaRow.className = 'flex flex-wrap items-center gap-2 text-sm text-black dark:text-white';
 
         if (course.teacher) {
             const teacher = document.createElement('span');
             teacher.textContent = course.teacher;
-            teacher.style.color = '#ffffff';
             metaRow.appendChild(teacher);
         }
+
         if (course.semester) {
             if (course.teacher) {
                 const dot = document.createElement('span');
-                dot.textContent = '\u00B7';
-                dot.style.opacity = '0.5';
-                dot.style.color = '#ffffff';
+                dot.textContent = '·';
+                dot.className = 'opacity-50';
                 metaRow.appendChild(dot);
             }
+
             const semester = document.createElement('span');
             semester.textContent = course.semester;
-            semester.style.color = '#ffffff';
             metaRow.appendChild(semester);
         }
+
         const sourceBadge = document.createElement('span');
-        sourceBadge.className = 'notion-tag';
-        sourceBadge.style.color = '#ffffff';
-        sourceBadge.style.backgroundColor = 'rgba(255,255,255,0.15)';
+        sourceBadge.className = 'notion-tag bg-notion-bg-hover dark:bg-dark-border text-black dark:text-white';
         sourceBadge.textContent = course.sourceLabel;
         metaRow.appendChild(sourceBadge);
 
