@@ -1615,44 +1615,42 @@ ${scoreLine}
     }
 
     async function parsePlannerPdfFile(file) {
-        const payload = await extractPlannerPdfPayload(file);
-        if (!payload.text.trim()) {
-            return { courses: [], warnings: ['PDF 內容為空白。'] };
+        if (file.size > 10 * 1024 * 1024) {
+            throw new Error('PDF 檔案過大，請上傳 10MB 以下的課表 PDF。');
         }
 
-        const layoutParsed = parsePlannerPdfCoursesByLayout(payload.pages);
-        const textParsed = parsePlannerPdfCourses(payload.text);
-        const mergedCourses = layoutParsed.courses.length
-            ? mergePlannerParsedCourses(layoutParsed.courses, textParsed.courses, { primaryStrict: true })
-            : mergePlannerParsedCourses([], textParsed.courses);
-
-        const warnings = [];
-        if (!mergedCourses.length) {
-            warnings.push('PDF 版型無法自動辨識，請改用其他課表 PDF。');
-            return { courses: [], warnings };
-        }
-
-        // 移除沒節次且課名是另一個有節次課程前綴的殘留課程
-        // 例如「品牌設計與行銷」是「品牌設計與行銷企劃」的前綴，視為誤解析移除
-        const namesWithTimes = new Set(
-            mergedCourses.filter(c => Array.isArray(c.times) && c.times.length).map(c => c.course)
-        );
-        const finalCourses = mergedCourses.filter((c) => {
-            if (Array.isArray(c.times) && c.times.length) return true;
-            for (const name of namesWithTimes) {
-                if (name !== c.course && name.startsWith(c.course)) return false;
-            }
-            return true;
+        const fileData = await fileToDataUrl(file);
+        const response = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/planner-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: file.name || 'planner.pdf',
+                fileData
+            })
         });
 
-        if (!finalCourses.some((course) => Array.isArray(course.times) && course.times.length)) {
-            warnings.push('已讀取課程名稱，但未辨識到節次，請手動補上 times。');
-        } else if (finalCourses.some((course) => !Array.isArray(course.times) || !course.times.length)) {
-            warnings.push('部分課程未辨識到完整節次，請確認後再排課。');
+        if (!response.ok) {
+            const payload = await safeParseJSON(response);
+            throw new Error(payload?.error || 'AI 課表辨識失敗，請稍後再試。');
         }
 
-        const studentGrade = detectStudentGradeFromPdfText(payload.text);
-        return { courses: finalCourses, warnings, studentGrade };
+        const payload = await response.json();
+        return {
+            courses: Array.isArray(payload.courses) ? payload.courses : [],
+            warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+            studentGrade: payload.studentGrade ?? null
+        };
+    }
+
+    async function fileToDataUrl(file) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        return `data:application/pdf;base64,${btoa(binary)}`;
     }
 
     async function extractPlannerPdfPayload(file) {
