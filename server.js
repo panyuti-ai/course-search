@@ -64,13 +64,15 @@ const STATIC_DIR = process.env.STATIC_DIR
   ? path.resolve(process.env.STATIC_DIR)
   : path.join(__dirname, "public");
 
-// AI provider 設定：優先用 anthropic，fallback 到 openai
+// AI provider 設定：可用 anthropic / openai / openrouter
 const AI_PROVIDER = process.env.AI_PROVIDER || "anthropic";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 function getActiveApiKey() {
   if (AI_PROVIDER === "anthropic") return ANTHROPIC_API_KEY;
+  if (AI_PROVIDER === "openrouter") return OPENROUTER_API_KEY;
   return OPENAI_API_KEY;
 }
 
@@ -101,6 +103,27 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
     }
     const data = await response.json();
     return data.content?.[0]?.text?.trim() || "";
+  } else if (AI_PROVIDER === "openrouter") {
+    const body = {
+      model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature,
+    };
+    if (json) body.response_format = { type: "json_object" };
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`OpenRouter API error: ${text}`);
+    }
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || "";
   } else {
     const body = {
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",

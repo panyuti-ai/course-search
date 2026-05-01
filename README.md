@@ -29,7 +29,7 @@ public/               server.js
 
    ```bash
    cp .env.example .env
-   # 編輯 .env，填入 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
+   # 編輯 .env，填入 ANTHROPIC_API_KEY 或 OPENAI_API_KEY 或 OPENROUTER_API_KEY
    ```
 
 3. **設定前端 API 網址**
@@ -56,7 +56,7 @@ public/               server.js
 1. 在 Railway 建立新專案，連結此 repo
 2. Railway 會自動偵測 Node.js 並執行 `npm start`
 3. 在 Railway 的環境變數設定頁加入：
-   - `ANTHROPIC_API_KEY`（或 `OPENAI_API_KEY`）
+   - `ANTHROPIC_API_KEY`（或 `OPENAI_API_KEY` / `OPENROUTER_API_KEY`）
    - `CORS_ORIGIN`：填入你的 Vercel 前端網址，例如 `https://your-app.vercel.app`
 4. 取得 Railway 提供的後端網址（例如 `https://your-backend.railway.app`）
 
