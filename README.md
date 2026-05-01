@@ -29,7 +29,16 @@ public/               server.js
 
    ```bash
    cp .env.example .env
-   # 編輯 .env，填入 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
+   # 編輯 .env，填入 ANTHROPIC_API_KEY、OPENAI_API_KEY，或 OpenRouter 的 API key
+   ```
+
+   OpenRouter 使用 OpenAI-compatible API，可設定：
+
+   ```env
+   AI_PROVIDER=openai
+   OPENAI_API_KEY=sk-or-v1-xxxxxx
+   OPENAI_BASE_URL=https://openrouter.ai/api/v1
+   OPENAI_MODEL=openai/gpt-4o-mini
    ```
 
 3. **設定前端 API 網址**
@@ -57,6 +66,7 @@ public/               server.js
 2. Railway 會自動偵測 Node.js 並執行 `npm start`
 3. 在 Railway 的環境變數設定頁加入：
    - `ANTHROPIC_API_KEY`（或 `OPENAI_API_KEY`）
+   - 使用 OpenRouter 時加上 `AI_PROVIDER=openai`、`OPENAI_BASE_URL=https://openrouter.ai/api/v1` 與 OpenRouter model id
    - `CORS_ORIGIN`：填入你的 Vercel 前端網址，例如 `https://your-app.vercel.app`
 4. 取得 Railway 提供的後端網址（例如 `https://your-backend.railway.app`）
 
