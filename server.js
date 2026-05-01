@@ -68,6 +68,7 @@ const STATIC_DIR = process.env.STATIC_DIR
 const AI_PROVIDER = process.env.AI_PROVIDER || "anthropic";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
 
 function getActiveApiKey() {
   if (AI_PROVIDER === "anthropic") return ANTHROPIC_API_KEY;
@@ -108,7 +109,7 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
       temperature,
     };
     if (json) body.response_format = { type: "json_object" };
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
