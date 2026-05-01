@@ -69,6 +69,8 @@ const AI_PROVIDER = process.env.AI_PROVIDER || "anthropic";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+const OPENROUTER_PDF_MODEL = process.env.OPENROUTER_PDF_MODEL || process.env.OPENAI_MODEL || "openai/gpt-4o-mini";
+const OPENROUTER_PDF_ENGINE = process.env.OPENROUTER_PDF_ENGINE || "mistral-ocr";
 
 function getActiveApiKey() {
   if (AI_PROVIDER === "anthropic") return ANTHROPIC_API_KEY;
@@ -109,7 +111,7 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
       temperature,
     };
     if (json) body.response_format = { type: "json_object" };
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -126,6 +128,45 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
   }
 }
 
+async function callOpenAICompatible(messages, { model, json = false, temperature = 0.1, maxTokens = 2048 } = {}) {
+  const body = {
+    model: model || process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+  if (json) body.response_format = { type: "json_object" };
+  const plugins = getOpenRouterPdfPlugins();
+  if (plugins) body.plugins = plugins;
+
+  const response = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI-compatible API error: ${text}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
+function getOpenRouterPdfPlugins() {
+  if (!OPENAI_BASE_URL.includes("openrouter.ai")) return undefined;
+  return [
+    {
+      id: "file-parser",
+      pdf: {
+        engine: OPENROUTER_PDF_ENGINE,
+      },
+    },
+  ];
+}
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -140,7 +181,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "15mb" }));
 
 const analyzeRateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -233,6 +274,110 @@ app.post("/api/analyze", requireAuth, analyzeRateLimiter, async (req, res) => {
   } catch (error) {
     console.error("呼叫 AI 時發生錯誤：", error);
     return res.status(500).json({ error: "伺服器處理 AI 分析時發生錯誤，請稍後再試。" });
+  }
+});
+
+app.post("/api/planner-pdf", requireAuth, analyzeRateLimiter, async (req, res) => {
+  if (AI_PROVIDER === "anthropic" || !OPENAI_API_KEY) {
+    return res.status(503).json({ error: "PDF 課表辨識需要 OpenAI-compatible API key，例如 OpenRouter。" });
+  }
+
+  const { filename, fileData } = req.body || {};
+  if (!filename || typeof filename !== "string" || !filename.toLowerCase().endsWith(".pdf")) {
+    return res.status(400).json({ error: "請上傳 PDF 檔案。" });
+  }
+  if (!fileData || typeof fileData !== "string" || !fileData.startsWith("data:application/pdf;base64,")) {
+    return res.status(400).json({ error: "PDF 檔案格式錯誤。" });
+  }
+
+  const approxBytes = Math.floor((fileData.length - "data:application/pdf;base64,".length) * 0.75);
+  if (approxBytes > 10 * 1024 * 1024) {
+    return res.status(413).json({ error: "PDF 檔案過大，請上傳 10MB 以下的課表 PDF。" });
+  }
+
+  const prompt = `你是逢甲大學課表 PDF 辨識器。請讀取上傳的 PDF，抽取學生本學期已排課程。
+
+請只回傳 JSON，不要 Markdown，不要說明文字。格式：
+{
+  "studentGrade": 1,
+  "courses": [
+    {
+      "course": "課程名稱",
+      "teacher": "教師姓名，無法辨識則空字串",
+      "credits": 2,
+      "times": ["MON1", "MON2"],
+      "required": false
+    }
+  ],
+  "warnings": ["無法辨識的問題"]
+}
+
+規則：
+- course 必須是課名，不要包含教室、節次、選課代碼。
+- credits 必須是數字；無法辨識用 null。
+- times 使用英文星期 MON/TUE/WED/THU/FRI/SAT/SUN 加節次，例如 MON1、TUE10、FRI11。
+- 若同一課程跨多個節次或多天，times 放全部節次。
+- studentGrade 若從班級或年級資訊看得出來，回傳 1 到 5；無法辨識用 null。
+- warnings 用繁體中文簡短列出不確定處，沒有則空陣列。`;
+
+  try {
+    const content = await callOpenAICompatible(
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "file",
+              file: {
+                filename,
+                file_data: fileData,
+              },
+            },
+          ],
+        },
+      ],
+      { model: OPENROUTER_PDF_MODEL, json: true, temperature: 0.1, maxTokens: 2500 }
+    );
+
+    const start = content.indexOf("{");
+    const end = content.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      console.error("planner-pdf: no JSON found in content:", content.slice(0, 200));
+      return res.status(502).json({ error: "AI 回傳格式錯誤。" });
+    }
+
+    const parsed = JSON.parse(content.slice(start, end + 1));
+    const courses = Array.isArray(parsed.courses)
+      ? parsed.courses
+          .filter((course) => course && typeof course.course === "string" && course.course.trim())
+          .slice(0, 80)
+          .map((course) => ({
+            course: course.course.trim(),
+            teacher: typeof course.teacher === "string" ? course.teacher.trim() : "",
+            credits: Number.isFinite(Number(course.credits)) ? Number(course.credits) : null,
+            times: Array.isArray(course.times)
+              ? course.times
+                  .filter((slot) => typeof slot === "string")
+                  .map((slot) => slot.trim().toUpperCase())
+                  .filter((slot) => /^(MON|TUE|WED|THU|FRI|SAT|SUN)([1-9]|1[0-4])$/.test(slot))
+              : [],
+            required: Boolean(course.required),
+            source: "uploaded_pdf_ai",
+          }))
+      : [];
+
+    const studentGrade = Number.isInteger(parsed.studentGrade) && parsed.studentGrade >= 1 && parsed.studentGrade <= 5
+      ? parsed.studentGrade
+      : null;
+    const warnings = Array.isArray(parsed.warnings)
+      ? parsed.warnings.filter((warning) => typeof warning === "string" && warning.trim()).slice(0, 8)
+      : [];
+
+    return res.json({ courses, warnings, studentGrade });
+  } catch (error) {
+    console.error("planner-pdf error:", error);
+    return res.status(500).json({ error: "伺服器處理 PDF 課表辨識時發生錯誤。" });
   }
 });
 

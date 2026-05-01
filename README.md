@@ -39,7 +39,11 @@ public/               server.js
    OPENAI_API_KEY=sk-or-v1-xxxxxx
    OPENAI_BASE_URL=https://openrouter.ai/api/v1
    OPENAI_MODEL=openai/gpt-4o-mini
+   OPENROUTER_PDF_MODEL=openai/gpt-4o-mini
+   OPENROUTER_PDF_ENGINE=mistral-ocr
    ```
+
+   上傳課表 PDF 時，前端會將 PDF 傳到後端 `/api/planner-pdf`，再由後端呼叫 OpenRouter 解析課程、教師、學分與節次；不會把 API key 暴露在前端。`OPENROUTER_PDF_ENGINE=mistral-ocr` 較適合掃描或圖片型 PDF，若要降低成本可改成 `cloudflare-ai`。
 
 3. **設定前端 API 網址**
 
@@ -66,7 +70,7 @@ public/               server.js
 2. Railway 會自動偵測 Node.js 並執行 `npm start`
 3. 在 Railway 的環境變數設定頁加入：
    - `ANTHROPIC_API_KEY`（或 `OPENAI_API_KEY`）
-   - 使用 OpenRouter 時加上 `AI_PROVIDER=openai`、`OPENAI_BASE_URL=https://openrouter.ai/api/v1` 與 OpenRouter model id
+   - 使用 OpenRouter 時加上 `AI_PROVIDER=openai`、`OPENAI_BASE_URL=https://openrouter.ai/api/v1`、OpenRouter model id，以及 PDF 辨識用的 `OPENROUTER_PDF_MODEL`
    - `CORS_ORIGIN`：填入你的 Vercel 前端網址，例如 `https://your-app.vercel.app`
 4. 取得 Railway 提供的後端網址（例如 `https://your-backend.railway.app`）
 
