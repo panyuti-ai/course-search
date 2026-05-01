@@ -1539,9 +1539,25 @@ ${scoreLine}
     async function handlePlannerFileUpload(event) {
         const file = event.target?.files?.[0];
         if (!file) return;
+        const fileButton = document.getElementById('planner-file-btn');
+        const fileNameEl = document.getElementById('planner-file-name');
+        const uploadedCreditsEl = document.getElementById('planner-uploaded-credits');
+        const originalButtonText = fileButton?.textContent || '選擇檔案';
+
         try {
             if (!isPlannerPdfFile(file)) {
                 throw new Error('僅支援 PDF 檔案，請上傳課表 PDF。');
+            }
+
+            if (fileButton) {
+                fileButton.disabled = true;
+                fileButton.textContent = '辨識中...';
+                fileButton.classList.add('opacity-60', 'cursor-not-allowed');
+            }
+            if (fileNameEl) fileNameEl.textContent = `${file.name}（AI 辨識中...）`;
+            if (uploadedCreditsEl) {
+                uploadedCreditsEl.textContent = '正在用 AI 辨識課表，可能需要幾秒鐘...';
+                uploadedCreditsEl.classList.remove('hidden');
             }
 
             const parsed = await parsePlannerPdfFile(file);
@@ -1560,7 +1576,6 @@ ${scoreLine}
 
             // Show current credit total below the file input
             const totalCredits = enriched.reduce((sum, c) => sum + (c.credits || 0), 0);
-            const uploadedCreditsEl = document.getElementById('planner-uploaded-credits');
             if (uploadedCreditsEl) {
                 const grade = state.planner.studentGrade;
                 const gradeText = grade ? `（${grade} 年級）` : '';
@@ -1573,7 +1588,6 @@ ${scoreLine}
                 uploadedCreditsEl.classList.remove('hidden');
             }
 
-            const fileNameEl = document.getElementById('planner-file-name');
             if (fileNameEl) fileNameEl.textContent = file.name;
 
             renderPlanner();
@@ -1589,8 +1603,15 @@ ${scoreLine}
         } catch (error) {
             console.error('Failed to read planner file:', error);
             state.planner.uploadedCourses = [];
+            if (fileNameEl) fileNameEl.textContent = '未選擇任何檔案';
+            if (uploadedCreditsEl) uploadedCreditsEl.classList.add('hidden');
             showToast(error.message || '讀取 PDF 失敗，請稍後再試。', 'error');
         } finally {
+            if (fileButton) {
+                fileButton.disabled = false;
+                fileButton.textContent = originalButtonText;
+                fileButton.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
             if (event.target) {
                 event.target.value = '';
             }
@@ -3395,7 +3416,10 @@ ${scoreLine}
     // Look up credits for a PDF-parsed course from the fcu_courses catalog.
     // Matches by normalised course name (and optionally teacher name).
     function enrichPlannerCourseCredits(course) {
-        if (course.credits != null) return course;
+        const parsedCredits = toPlannerNumber(course.credits);
+        if (parsedCredits && parsedCredits > 0) {
+            return { ...course, credits: parsedCredits };
+        }
 
         // Strip trailing "(老師名)" suffixes that may be embedded in the parsed course name.
         // e.g. "專題研究(一)(陳錫民)" → "專題研究(一)", "體育(二)(黃素)" → "體育(二)"
@@ -3422,8 +3446,21 @@ ${scoreLine}
                 .some((t) => t === teacher || (teacher.length >= 2 && t.startsWith(teacher)));
         }
 
+        function timeMatchScore(catalogCourse) {
+            const uploadedTimes = Array.isArray(course.times) ? course.times : [];
+            const catalogTimes = Array.isArray(catalogCourse.times) ? catalogCourse.times : [];
+            if (!uploadedTimes.length || !catalogTimes.length) return 0;
+
+            const catalogSet = new Set(catalogTimes);
+            const allUploadedMatch = uploadedTimes.every((slot) => catalogSet.has(slot));
+            if (allUploadedMatch) return 2;
+
+            return uploadedTimes.some((slot) => catalogSet.has(slot)) ? 1 : 0;
+        }
+
         // Pass 1: exact course name match
         let best = null;
+        let bestScore = -1;
         let bestHasTeacher = false;
         // Collect all credits values for this course name to detect if they're all the same
         const exactMatches = [];
@@ -3433,13 +3470,15 @@ ${scoreLine}
             if (cname !== name) continue;
             exactMatches.push(c);
             const tm = teacherMatches(c.teacher);
-            if (tm && !bestHasTeacher) {
+            const score = (tm ? 10 : 0) + timeMatchScore(c);
+            if (tm && score > bestScore) {
                 best = c;
+                bestScore = score;
                 bestHasTeacher = true;
             } else if (!best) {
                 best = c;
+                bestScore = score;
             }
-            if (bestHasTeacher) break;
         }
         // If teacher is unknown but all matching entries have the same credits, use that value safely
         if (!bestHasTeacher && exactMatches.length) {
