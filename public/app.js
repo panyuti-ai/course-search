@@ -1525,9 +1525,23 @@ ${scoreLine}
         // 供課表選擇彈窗使用：載入已儲存的課表
         window.__plannerLoadCourses = function(courses) {
             if (!Array.isArray(courses)) return;
+            const loadedCourses = courses
+                .map((course, index) => normalizePlannerInputCourse({
+                    ...course,
+                    source: course?.source || 'uploaded_saved'
+                }, index))
+                .filter(Boolean)
+                .map((course) => ({
+                    ...course,
+                    pinned: true,
+                    source: course.sourceKey || 'uploaded_saved',
+                    times: Array.isArray(course.timeSlots) ? course.timeSlots.slice() : []
+                }));
+
+            state.planner.uploadedCourses = loadedCourses;
             state.planner.selected = new Map();
-            courses.forEach(c => {
-                if (c && c.id) state.planner.selected.set(c.id, c);
+            loadedCourses.forEach(c => {
+                state.planner.selected.set(c.id, c);
             });
             state.planner.hasPlan = true;
             renderPlanner();
