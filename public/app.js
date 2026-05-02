@@ -3258,19 +3258,23 @@ ${scoreLine}
         const visibleDays = DAYS.filter((d, i) => i < 5 || activeDaySet.has(d));
 
         // Build table HTML.
-        const cellBase = 'border border-notion-border dark:border-dark-border px-1 py-1 text-center align-middle';
+        const cellBase = 'border border-notion-border dark:border-dark-border px-2 py-2 text-center align-middle';
         const headerCell = `${cellBase} font-semibold bg-notion-bg-secondary dark:bg-dark-card text-notion-text-secondary dark:text-dark-text-secondary text-xs`;
+        const periodCell = `${cellBase} text-notion-text-secondary dark:text-dark-text-secondary font-medium text-xs bg-white dark:bg-dark-bg`;
+        const emptyCell = `${cellBase} bg-white dark:bg-dark-bg hover:bg-notion-bg-hover dark:hover:bg-dark-card focus:bg-notion-bg-hover dark:focus:bg-dark-card cursor-pointer transition-colors duration-100`;
+        const dayMinWidth = '8.75rem';
+        const rowHeight = '2.75rem';
 
         let html = '<thead><tr>';
-        html += `<th class="${headerCell}" style="width:2rem;min-width:2rem;">節</th>`;
+        html += `<th class="${headerCell}" style="width:2.75rem;min-width:2.75rem;">節</th>`;
         visibleDays.forEach((d) => {
-            html += `<th class="${headerCell}" style="min-width:5rem;">${DAY_LABELS[DAYS.indexOf(d)]}</th>`;
+            html += `<th class="${headerCell}" style="min-width:${dayMinWidth};">${DAY_LABELS[DAYS.indexOf(d)]}</th>`;
         });
         html += '</tr></thead><tbody>';
 
         PERIODS.forEach((period) => {
             html += '<tr>';
-            html += `<td class="${cellBase} text-notion-text-secondary dark:text-dark-text-secondary font-medium text-xs" style="width:2rem;min-width:2rem;">${period}</td>`;
+            html += `<td class="${periodCell}" style="width:2.75rem;min-width:2.75rem;height:${rowHeight};">${period}</td>`;
             visibleDays.forEach((day) => {
                 const slotKey = `${day}${period}`;
                 const courseName = slotMap.get(slotKey) || '';
@@ -3281,19 +3285,22 @@ ${scoreLine}
                     const isSelected = selectedNames.has(courseName);
                     const opacity = isSelected ? '1' : '0.55';
                     const escapedName = courseName.replace(/"/g, '&quot;');
-                    html += `<td class="${cellBase}" data-course="${escapedName}" style="background:${bg};color:${fg};opacity:${opacity};font-size:0.72rem;line-height:1.4;min-width:5rem;word-break:break-all;white-space:normal;">${courseName}</td>`;
+                    html += `<td class="${cellBase}" data-course="${escapedName}" style="background:${bg};color:${fg};opacity:${opacity};font-size:0.82rem;line-height:1.45;min-width:${dayMinWidth};height:${rowHeight};word-break:keep-all;overflow-wrap:anywhere;white-space:normal;font-weight:600;">${courseName}</td>`;
                 } else {
-                    html += `<td class="${cellBase} bg-white dark:bg-dark-bg" style="min-width:5rem;"></td>`;
+                    const dayLabel = DAY_LABELS[DAYS.indexOf(day)];
+                    html += `<td class="${emptyCell}" tabindex="0" role="button" aria-label="新增星期${dayLabel}第${period}節課程" title="點擊查看可加入課程" data-empty-slot="${slotKey}" data-day-label="${dayLabel}" data-period="${period}" style="min-width:${dayMinWidth};height:${rowHeight};"></td>`;
                 }
             });
             html += '</tr>';
         });
         html += '</tbody>';
         table.innerHTML = html;
+        attachPlannerTimetableInteractions(table);
 
         // Sync to floating timetable with clickable remove on selected courses
         if (elements.floatingTimetableTable) {
             elements.floatingTimetableTable.innerHTML = html;
+            attachPlannerTimetableInteractions(elements.floatingTimetableTable);
             // Add click-to-remove on selected (non-pinned) course cells
             elements.floatingTimetableTable.querySelectorAll('td[data-course]').forEach((td) => {
                 const name = td.dataset.course;
@@ -3323,6 +3330,150 @@ ${scoreLine}
         } else {
             updateFloatingTimetableVisibility();
         }
+    }
+
+    function attachPlannerTimetableInteractions(table) {
+        table.querySelectorAll('td[data-empty-slot]').forEach((td) => {
+            const openPicker = () => {
+                showPlannerSlotPicker(td.dataset.emptySlot, td.dataset.dayLabel, td.dataset.period);
+            };
+            td.addEventListener('click', openPicker);
+            td.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openPicker();
+            });
+        });
+    }
+
+    function showPlannerSlotPicker(slotKey, dayLabel, period) {
+        if (!state.planner.hasPlan) {
+            showToast('請先產生建議課表，再從空白節次加入課程。', 'error');
+            return;
+        }
+
+        const existing = document.getElementById('planner-slot-picker');
+        if (existing) existing.remove();
+
+        const { slotCandidates, otherCandidates, teacherMap } = getPlannerSlotPickerCandidates(slotKey);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'planner-slot-picker';
+        overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6';
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) overlay.remove();
+        });
+
+        const panel = document.createElement('section');
+        panel.className = 'w-full max-w-2xl max-h-[82vh] overflow-hidden rounded-lg border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card shadow-2xl';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+
+        const header = document.createElement('div');
+        header.className = 'flex items-start justify-between gap-4 border-b border-notion-border dark:border-dark-border px-4 py-3 bg-notion-bg-secondary dark:bg-dark-bg-secondary';
+
+        const titleWrap = document.createElement('div');
+        const title = document.createElement('h4');
+        title.className = 'text-sm font-semibold';
+        title.textContent = `星期${dayLabel}第 ${period} 節`;
+        const subtitle = document.createElement('p');
+        subtitle.className = 'mt-1 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+        subtitle.textContent = '優先顯示能放進此空白節次，且不與目前課表衝堂的課程。';
+        titleWrap.append(title, subtitle);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'min-h-9 min-w-9 rounded-md border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border';
+        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', '關閉');
+        closeBtn.addEventListener('click', () => overlay.remove());
+        header.append(titleWrap, closeBtn);
+        panel.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = 'max-h-[calc(82vh-4.5rem)] overflow-y-auto px-4 py-3';
+
+        appendPlannerSlotPickerSection(content, '此節可加入課程', slotCandidates, teacherMap, overlay, slotKey);
+        appendPlannerSlotPickerSection(content, '其他推薦課程', otherCandidates, teacherMap, overlay, slotKey);
+
+        if (!slotCandidates.length && !otherCandidates.length) {
+            content.appendChild(createPlannerEmptyState('目前沒有可加入且不衝堂的課程。'));
+        }
+
+        panel.appendChild(content);
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        closeBtn.focus();
+    }
+
+    function getPlannerSlotPickerCandidates(slotKey) {
+        const selectedIds = new Set(state.planner.selected.keys());
+        const allCandidates = state.planner.pool
+            .filter((course) => !selectedIds.has(course.id))
+            .filter((course) => !course.pinned)
+            .filter((course) => !hasPlannerConflictWithSelected(course, state.planner.selected))
+            .sort((a, b) => comparePlannerCourses(b, a));
+
+        const teacherMap = new Map();
+        allCandidates.forEach((course) => {
+            if (!teacherMap.has(course.course)) teacherMap.set(course.course, []);
+            teacherMap.get(course.course).push(course);
+        });
+
+        const seen = new Set();
+        const slotCandidates = [];
+        const otherCandidates = [];
+
+        allCandidates.forEach((course) => {
+            if (course.course && seen.has(course.course)) return;
+            const hasSlot = Array.isArray(course.timeSlots) && course.timeSlots.includes(slotKey);
+            if (hasSlot) {
+                slotCandidates.push(course);
+                if (course.course) seen.add(course.course);
+            }
+        });
+
+        allCandidates.forEach((course) => {
+            if (course.course && seen.has(course.course)) return;
+            const base = (course.relevance ?? 0) - (course.required ? 10000 : 0);
+            if (base <= 0 && !course.required) return;
+            otherCandidates.push(course);
+            if (course.course) seen.add(course.course);
+        });
+
+        return {
+            slotCandidates: slotCandidates.slice(0, 18),
+            otherCandidates: otherCandidates.slice(0, 18),
+            teacherMap
+        };
+    }
+
+    function appendPlannerSlotPickerSection(container, title, courses, teacherMap, overlay, slotKey) {
+        if (!courses.length) return;
+
+        const header = document.createElement('h5');
+        header.className = 'mb-2 mt-3 text-xs font-semibold uppercase tracking-wider text-notion-text-secondary dark:text-dark-text-secondary first:mt-0';
+        header.textContent = title;
+        container.appendChild(header);
+
+        const list = document.createElement('div');
+        list.className = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
+        courses.forEach((course) => {
+            const variants = (teacherMap.get(course.course) || [course])
+                .filter((variant) => {
+                    if (title === '此節可加入課程' && !variant.timeSlots.includes(slotKey)) return false;
+                    return !hasPlannerConflictWithSelected(variant, state.planner.selected);
+                });
+            const card = createPlannerCourseCard(course, {
+                actionLabel: '加入',
+                onAction: () => {
+                    overlay.remove();
+                    plannerAddCourseWithTeacherPicker(course, variants.length ? variants : [course], false);
+                }
+            });
+            list.appendChild(card);
+        });
+        container.appendChild(list);
     }
 
     function updateFloatingTimetableVisibility() {
