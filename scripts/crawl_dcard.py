@@ -120,7 +120,7 @@ def main():
 
     # 連線測試
     print("正在測試連線...")
-    test = api_get("https://www.dcard.tw/service/api/v2/search/posts?query=%E9%80%A2%E7%94%B2&limit=1")
+    test = api_get("https://www.dcard.tw/service/api/v2/forums?limit=1")
     if test is None:
         print("❌  無法連到 Dcard API，請重新複製 cookie 再試。")
         sys.exit(1)
