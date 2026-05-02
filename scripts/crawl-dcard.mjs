@@ -1,11 +1,12 @@
 /**
- * Dcard 爬蟲腳本（純 fetch + cookie 版）— 本機執行
+ * Dcard 爬蟲腳本（curl 子程序版）— 本機 Windows 執行
  *
  * 使用方式：
  *   1. 用普通 Chrome 登入 dcard.tw
  *   2. F12 → Network → 任意 request → Request Headers → 複製 cookie: 整行值
- *   3. 貼到下方 DCARD_COOKIE，或用環境變數傳入：
- *        DCARD_COOKIE="..." node scripts/crawl-dcard.mjs
+ *   3. PowerShell 執行：
+ *        $env:DCARD_COOKIE='貼上cookie值'
+ *        npm run crawl-dcard
  *
  * 中斷續跑：把 RESUME_FROM 改成已處理的課程數再重跑
  *
@@ -14,6 +15,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,30 +23,19 @@ const COURSES_PATH = path.join(__dirname, '../public/fcu_courses.json');
 const OUTPUT_PATH  = path.join(__dirname, 'dcard_raw.json');
 
 // ── 設定區 ────────────────────────────────────────────────────────────────────
-const POSTS_PER_COURSE  = 15;   // 每門課最多抓幾篇
-const COMMENTS_PER_POST = 30;   // 每篇最多抓幾則留言
-const REQUEST_DELAY_MS  = 1500; // 每次請求間隔（ms）
-const RESUME_FROM       = 0;    // 中斷後繼續：填已處理的課程數
+const POSTS_PER_COURSE  = 15;
+const COMMENTS_PER_POST = 30;
+const REQUEST_DELAY_MS  = 1500;
+const RESUME_FROM       = 0;
 
-// cookie 字串（從瀏覽器 DevTools 複製）
-// 也可以用環境變數 DCARD_COOKIE="..." 傳入
 const DCARD_COOKIE = process.env.DCARD_COOKIE || '';
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!DCARD_COOKIE) {
-    console.error('❌  請設定 DCARD_COOKIE 環境變數，或在腳本頂端填入 cookie 字串。');
-    console.error('   做法：Chrome 登入 dcard.tw → F12 → Network → 任意 request → Request Headers → 複製 cookie: 值');
+    console.error('❌  請設定 DCARD_COOKIE 環境變數。');
+    console.error('   PowerShell: $env:DCARD_COOKIE=\'cookie值\'');
     process.exit(1);
 }
-
-const HEADERS = {
-    'accept':          'application/json, text/plain, */*',
-    'accept-language': 'zh-TW,zh;q=0.9',
-    'cookie':          DCARD_COOKIE,
-    'referer':         'https://www.dcard.tw/',
-    'user-agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'x-requested-with': 'XMLHttpRequest',
-};
 
 function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
@@ -60,18 +51,37 @@ function deduplicateCourses(courses) {
     });
 }
 
-async function apiGet(url) {
-    const res = await fetch(url, { headers: HEADERS });
-    if (res.status === 429) {
-        console.warn('  ⚠️  rate-limit，等 10 秒後重試…');
-        await sleep(10_000);
-        return apiGet(url);
-    }
-    if (!res.ok) {
-        console.warn(`  HTTP ${res.status} for ${url}`);
+function curlGet(url) {
+    // 用系統 curl，TLS 指紋與 Node.js 不同，可繞過 Cloudflare JA3 偵測
+    const cookieEscaped = DCARD_COOKIE.replace(/'/g, "'\\''");
+    const cmd = [
+        'curl', '-s', '-L',
+        '--max-time', '15',
+        '-H', `"accept: application/json, text/plain, */*"`,
+        '-H', `"accept-language: zh-TW,zh;q=0.9"`,
+        '-H', `"referer: https://www.dcard.tw/"`,
+        '-H', `"user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"`,
+        '-H', `"cookie: ${DCARD_COOKIE.replace(/"/g, '\\"')}"`,
+        `"${url}"`,
+    ].join(' ');
+
+    try {
+        const out = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+        if (!out || !out.trim()) return null;
+        return JSON.parse(out);
+    } catch {
         return null;
     }
-    return res.json();
+}
+
+async function apiGet(url) {
+    let data = curlGet(url);
+    if (data === null) {
+        // 簡單重試一次
+        await sleep(3000);
+        data = curlGet(url);
+    }
+    return data;
 }
 
 async function searchPosts(course, teacher) {
@@ -108,6 +118,15 @@ async function main() {
         results = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
         console.log(`從第 ${RESUME_FROM} 筆繼續，已有 ${results.length} 筆\n`);
     }
+
+    // 先測試 curl 是否可用且能打通 Dcard
+    console.log('正在測試連線...');
+    const test = curlGet('https://www.dcard.tw/service/api/v2/search/posts?query=%E9%80%A2%E7%94%B2&limit=1');
+    if (!test) {
+        console.error('❌  無法連到 Dcard API，請確認：\n  1. curl 指令存在（在 PowerShell 輸入 curl --version）\n  2. cookie 有效（重新從瀏覽器複製）');
+        process.exit(1);
+    }
+    console.log('✅  連線成功，開始爬取...\n');
 
     const todo = courses.slice(RESUME_FROM);
     let processed = RESUME_FROM;
