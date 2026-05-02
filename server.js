@@ -58,6 +58,7 @@ initDB().catch(console.error);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MAX_PLANNER_HISTORY = 5;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STATIC_DIR = process.env.STATIC_DIR
@@ -542,7 +543,10 @@ app.get("/api/analyses", requireAuth, async (req, res) => {
 // ── 排課計畫 API ──────────────────────────────────────────
 // 取得所有計畫
 app.get("/api/planners", requireAuth, async (req, res) => {
-  const rows = await pool.query("SELECT * FROM planners WHERE nid=$1 ORDER BY updated_at DESC", [req.user.nid]);
+  const rows = await pool.query(
+    "SELECT * FROM planners WHERE nid=$1 ORDER BY updated_at DESC LIMIT $2",
+    [req.user.nid, MAX_PLANNER_HISTORY]
+  );
   res.json({ planners: rows.rows });
 });
 
@@ -553,6 +557,16 @@ app.post("/api/planners", requireAuth, async (req, res) => {
   const row = await pool.query(
     "INSERT INTO planners (nid, name, courses) VALUES ($1,$2,$3) RETURNING *",
     [req.user.nid, name, JSON.stringify(courses || [])]
+  );
+  await pool.query(
+    `DELETE FROM planners
+     WHERE id IN (
+       SELECT id FROM planners
+       WHERE nid=$1
+       ORDER BY updated_at DESC
+       OFFSET $2
+     )`,
+    [req.user.nid, MAX_PLANNER_HISTORY]
   );
   res.json({ planner: row.rows[0] });
 });
