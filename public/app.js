@@ -1527,7 +1527,10 @@ ${scoreLine}
         window.__plannerLoadCourses = function(courses) {
             if (!Array.isArray(courses)) return;
             const savedState = parseSavedPlannerState(courses);
-            const loadedCourses = savedState.fixedCourses
+            const fixedSourceCourses = savedState.fixedCourses.length
+                ? savedState.fixedCourses
+                : savedState.selectedCourses;
+            const loadedCourses = fixedSourceCourses
                 .map((course, index) => normalizePlannerInputCourse({
                     ...course,
                     source: course?.source || 'uploaded_saved'
@@ -1544,13 +1547,22 @@ ${scoreLine}
             state.planner.selected = new Map();
             const selectedCourses = savedState.selectedCourses.length ? savedState.selectedCourses : loadedCourses;
             selectedCourses
-                .map((course, index) => normalizePlannerInputCourse(course, index))
+                .map((course, index) => normalizePlannerInputCourse({
+                    ...course,
+                    source: course?.source || 'uploaded_saved'
+                }, index))
                 .filter(Boolean)
-                .forEach(c => {
-                    if (loadedCourses.some((fixed) => fixed.id === c.id || plannerCourseSignature(fixed) === plannerCourseSignature(c))) {
-                        c.pinned = true;
-                    }
-                    state.planner.selected.set(c.id, c);
+                .forEach(course => {
+                    const fixedMatch = loadedCourses.find((fixed) =>
+                        fixed.id === course.id || plannerCourseSignature(fixed) === plannerCourseSignature(course)
+                    );
+                    const selectedCourse = {
+                        ...course,
+                        pinned: true,
+                        source: course.sourceKey || 'uploaded_saved',
+                        times: Array.isArray(course.timeSlots) ? course.timeSlots.slice() : []
+                    };
+                    state.planner.selected.set((fixedMatch || selectedCourse).id, fixedMatch || selectedCourse);
                 });
             loadedCourses.forEach(c => {
                 state.planner.selected.set(c.id, c);
