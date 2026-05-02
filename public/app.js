@@ -1570,9 +1570,8 @@ ${scoreLine}
             loadedCourses.forEach(c => {
                 state.planner.selected.set(c.id, c);
             });
-            state.planner.pool = savedState.poolCourses.length
-                ? savedState.poolCourses.map((course, index) => normalizePlannerInputCourse(course, index)).filter(Boolean).map((course) => hydrateSavedPlannerCourseFromCatalog(course))
-                : loadedCourses.slice();
+            const built = buildPlannerPool(loadedCourses);
+            state.planner.pool = built.pool;
             state.planner.hasPlan = true;
             renderPlanner();
             // 捲動到排課區塊
@@ -3510,7 +3509,7 @@ ${scoreLine}
             studentGrade: state.planner.studentGrade,
             selectedCourses: selected,
             fixedCourses: Array.isArray(state.planner.uploadedCourses) ? state.planner.uploadedCourses : [],
-            poolCourses: Array.isArray(state.planner.pool) ? state.planner.pool : []
+            poolCourses: []
         }];
     }
 
