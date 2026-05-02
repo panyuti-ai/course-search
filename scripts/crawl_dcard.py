@@ -89,7 +89,7 @@ def search_posts(course: str, teacher: str):
     return data if isinstance(data, list) else data.get("posts", [])
 
 
-def fetch_comments(post_id) -> list[str]:
+def fetch_comments(post_id):
     url = f"https://www.dcard.tw/service/api/v2/posts/{post_id}/comments?limit={COMMENTS_PER_POST}"
     data = api_get(url)
     if not data:
