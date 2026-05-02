@@ -2675,7 +2675,7 @@ ${scoreLine}
         const sourceDifficulty = toPlannerNumber(item.difficulty);
         const credits = toPlannerNumber(item.credits ?? item.credit ?? item['學分']) ?? inferPlannerCredits(tags);
         const sourceKey = toPlannerString(item.source) || 'uploaded';
-        const pinned = sourceKey === 'uploaded' || sourceKey === 'uploaded_pdf';
+        const pinned = sourceKey === 'uploaded' || sourceKey.startsWith('uploaded_');
 
         return {
             id: createPlannerId(item, index),
