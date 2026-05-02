@@ -3253,16 +3253,19 @@ ${scoreLine}
         const selectedCourses = state.planner.hasPlan
             ? Array.from(state.planner.selected.values()) : [];
 
-        // Build a union list: uploaded + selected (deduplicated by name).
-        const allCourses = [];
-        const seenNames = new Set();
+        // Build a union list by name. If the saved fixed copy lacks times but
+        // the selected copy has them, keep the richer timetable data.
+        const courseByName = new Map();
         [...uploadedCourses, ...selectedCourses].forEach((c) => {
             const name = toPlannerString(c?.course ?? c?.name);
-            if (!name || seenNames.has(name)) return;
-            seenNames.add(name);
             const times = Array.isArray(c.times) ? c.times : (Array.isArray(c.timeSlots) ? c.timeSlots : []);
-            allCourses.push({ name, times });
+            if (!name) return;
+            const existing = courseByName.get(name);
+            if (!existing || times.length > existing.times.length) {
+                courseByName.set(name, { name, times });
+            }
         });
+        const allCourses = Array.from(courseByName.values());
 
         if (!allCourses.length && !state.planner.hasPlan) {
             wrap.classList.add('hidden');
