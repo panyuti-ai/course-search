@@ -55,7 +55,7 @@ function curlGet(url) {
     // 用系統 curl，TLS 指紋與 Node.js 不同，可繞過 Cloudflare JA3 偵測
     const cookieEscaped = DCARD_COOKIE.replace(/'/g, "'\\''");
     const cmd = [
-        'curl', '-s', '-L',
+        'curl.exe', '-s', '-L',
         '--max-time', '15',
         '-H', `"accept: application/json, text/plain, */*"`,
         '-H', `"accept-language: zh-TW,zh;q=0.9"`,
