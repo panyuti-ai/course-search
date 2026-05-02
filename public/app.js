@@ -3239,6 +3239,12 @@ ${scoreLine}
         '#92400e', '#0e7490', '#9d174d', '#365314', '#312e81'
     ];
 
+    function getPlannerTimetableTimes(course) {
+        const times = Array.isArray(course?.times) && course.times.length ? course.times : null;
+        const timeSlots = Array.isArray(course?.timeSlots) && course.timeSlots.length ? course.timeSlots : null;
+        return normalizePlannerTimes(times || timeSlots || []);
+    }
+
     function renderPlannerTimetable() {
         const wrap = elements.plannerTimetableWrap;
         const table = elements.plannerTimetable;
@@ -3258,7 +3264,7 @@ ${scoreLine}
         const courseByName = new Map();
         [...uploadedCourses, ...selectedCourses].forEach((c) => {
             const name = toPlannerString(c?.course ?? c?.name);
-            const times = Array.isArray(c.times) ? c.times : (Array.isArray(c.timeSlots) ? c.timeSlots : []);
+            const times = getPlannerTimetableTimes(c);
             if (!name) return;
             const existing = courseByName.get(name);
             if (!existing || times.length > existing.times.length) {
