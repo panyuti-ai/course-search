@@ -217,11 +217,12 @@
             initializePlannerSection();
             restoreStateFromURL();
             runSearch({ force: true });
-            if (getUser() && getToken()) showPlannerPicker();
         } catch (error) {
             console.error('Failed to initialize course search UI:', error);
             showBootstrapError('課程資料載入失敗，請稍後再試。');
+            return;
         }
+        if (getUser() && getToken()) showPlannerPicker();
     }
 
     async function loadCourses(retries = 3) {
