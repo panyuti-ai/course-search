@@ -4437,7 +4437,8 @@ ${scoreLine}
         modal.innerHTML = `
             <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
                 <h2 class="text-base font-semibold mb-1">繼續上次的課表</h2>
-                <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary mb-4">選擇一個課表繼續，或略過從頭開始。</p>
+                <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary mb-1">選擇一個課表繼續，或略過從頭開始。</p>
+                <p class="text-xs text-notion-text-secondary dark:text-dark-text-secondary mb-4">最多保留 5 個課表紀錄；超過 5 個時會自動覆蓋最舊的紀錄。</p>
                 <div class="space-y-2 max-h-60 overflow-y-auto mb-4" id="planner-picker-list"></div>
                 <button id="planner-picker-skip" class="w-full py-2 text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:underline">略過，從頭開始</button>
             </div>`;
