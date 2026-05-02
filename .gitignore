@@ -1,3 +1,5 @@
 node_modules/
 .env
 public/config.js
+scripts/dcard_raw.json
+scripts/dcard_profiles.json
