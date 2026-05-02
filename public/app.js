@@ -1536,6 +1536,7 @@ ${scoreLine}
                     source: course?.source || 'uploaded_saved'
                 }, index))
                 .filter(Boolean)
+                .map((course) => hydrateSavedPlannerCourseFromCatalog(course))
                 .map((course) => ({
                     ...course,
                     pinned: true,
@@ -1552,6 +1553,7 @@ ${scoreLine}
                     source: course?.source || 'uploaded_saved'
                 }, index))
                 .filter(Boolean)
+                .map((course) => hydrateSavedPlannerCourseFromCatalog(course))
                 .forEach(course => {
                     const fixedMatch = loadedCourses.find((fixed) =>
                         fixed.id === course.id || plannerCourseSignature(fixed) === plannerCourseSignature(course)
@@ -3630,6 +3632,46 @@ ${scoreLine}
         empty.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary py-2';
         empty.textContent = text;
         return empty;
+    }
+
+    function hydrateSavedPlannerCourseFromCatalog(course) {
+        if (!course || !course.course) return course;
+        const hasTimes = Array.isArray(course.timeSlots) && course.timeSlots.length;
+        const hasCredits = Number.isFinite(course.credits) && course.credits > 0;
+        if (hasTimes && hasCredits) return course;
+
+        const courseName = normalizeCourseNameForMatch(course.course);
+        const teacher = normalizeCourseNameForMatch(course.teacher);
+        const matches = state.courses
+            .filter((candidate) => {
+                if (candidate.sourceKey !== 'fcu_scrape') return false;
+                if (normalizeCourseNameForMatch(candidate.course) !== courseName) return false;
+                if (!teacher) return true;
+                return toPlannerString(candidate.teacher)
+                    .split(/[,，、\/]/)
+                    .map((name) => normalizeCourseNameForMatch(name))
+                    .some((name) => name === teacher || name.startsWith(teacher) || teacher.startsWith(name));
+            })
+            .sort((a, b) => {
+                const semesterCompare = toPlannerString(b.semester).localeCompare(toPlannerString(a.semester), 'zh-Hant');
+                if (semesterCompare !== 0) return semesterCompare;
+                return (Array.isArray(b.timeSlots) ? b.timeSlots.length : 0) - (Array.isArray(a.timeSlots) ? a.timeSlots.length : 0);
+            });
+
+        const match = matches.find((candidate) => Array.isArray(candidate.timeSlots) && candidate.timeSlots.length) || matches[0];
+        if (!match) return course;
+
+        const timeSlots = hasTimes
+            ? course.timeSlots
+            : (Array.isArray(match.timeSlots) ? match.timeSlots.slice() : []);
+        const credits = hasCredits ? course.credits : match.credits;
+
+        return {
+            ...course,
+            credits: Number.isFinite(credits) ? credits : course.credits,
+            timeSlots,
+            times: timeSlots.slice()
+        };
     }
 
     function plannerCourseSignature(course) {
