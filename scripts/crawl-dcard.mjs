@@ -96,12 +96,9 @@ async function main() {
         console.log(`從第 ${RESUME_FROM} 筆繼續，已有 ${results.length} 筆\n`);
     }
 
-    // 開啟有頭瀏覽器
-    const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        locale: 'zh-TW',
-    });
+    // 連接已開啟的 Chrome（需先用 --remote-debugging-port=9222 啟動）
+    const browser = await chromium.connectOverCDP('http://localhost:9222');
+    const context = browser.contexts()[0] ?? await browser.newContext();
     const page = await context.newPage();
 
     // 讓使用者手動登入
