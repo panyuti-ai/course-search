@@ -1169,7 +1169,7 @@
         });
 
         const dcardButton = document.createElement('a');
-        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent('逢甲 ' + (course.course || ''))}`;
+        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent('逢甲 ' + (course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}`;
         dcardButton.target = '_blank';
         dcardButton.rel = 'noopener noreferrer';
         dcardButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
