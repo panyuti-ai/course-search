@@ -63,7 +63,7 @@ def api_get(url: str):
                 time.sleep(10)
                 continue
             if r.status_code != 200:
-                print(f"  HTTP {r.status_code}")
+                print(f"  HTTP {r.status_code}: {r.text[:300]}")
                 return None
             return r.json()
         except Exception as e:
