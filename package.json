@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "merge-data": "node scripts/mergeCourses.js",
-    "scrape-fcu": "node scripts/scrapeFcu.js"
+    "scrape-fcu": "node scripts/scrapeFcu.js",
+    "crawl-dcard": "node scripts/crawl-dcard.mjs"
   },
   "keywords": [],
   "author": "",

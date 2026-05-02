@@ -51,6 +51,18 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS course_dcard_profile (
+      id         SERIAL PRIMARY KEY,
+      course     TEXT NOT NULL,
+      teacher    TEXT NOT NULL,
+      tags       JSONB,
+      summary    TEXT,
+      score      NUMERIC(4,1) CHECK (score >= 0 AND score <= 100),
+      rating     NUMERIC(2,1) CHECK (rating >= 1 AND rating <= 5),
+      post_count INT DEFAULT 0,
+      crawled_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(course, teacher)
+    );
   `);
   console.log("DB tables ready");
 }
