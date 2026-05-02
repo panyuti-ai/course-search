@@ -1165,7 +1165,7 @@
         });
 
         const dcardButton = document.createElement('a');
-        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent((course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}&tab=post`;
+        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent((course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}&tab=post&f=feng-chia-university`;
         dcardButton.target = '_blank';
         dcardButton.rel = 'noopener noreferrer';
         dcardButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
