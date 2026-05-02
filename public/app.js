@@ -3229,14 +3229,14 @@ ${scoreLine}
         renderPlannerTimetable();
     }
 
-    // Palette of distinct background colours (Tailwind-compatible inline styles).
+    // Notion-style muted palette (matches tag colours in new_styles.css).
     const TIMETABLE_COLORS = [
-        '#bfdbfe', '#bbf7d0', '#fde68a', '#fecaca', '#e9d5ff',
-        '#fed7aa', '#a5f3fc', '#fbcfe8', '#d9f99d', '#c7d2fe'
+        '#d3edf6', '#dbeddb', '#eae4f2', '#fadec9', '#fbe4e4',
+        '#e8e8e4', '#d3edf6', '#eae4f2', '#dbeddb', '#fadec9'
     ];
     const TIMETABLE_TEXT_COLORS = [
-        '#1e40af', '#065f46', '#92400e', '#991b1b', '#6b21a8',
-        '#92400e', '#0e7490', '#9d174d', '#365314', '#312e81'
+        '#2374ab', '#0f7b6c', '#6940a5', '#d9730d', '#eb5757',
+        '#37352f', '#0e7490', '#6940a5', '#0f7b6c', '#d9730d'
     ];
 
     function getPlannerTimetableTimes(course) {
