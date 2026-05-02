@@ -217,6 +217,7 @@
             initializePlannerSection();
             restoreStateFromURL();
             runSearch({ force: true });
+            if (getUser() && getToken()) showPlannerPicker();
         } catch (error) {
             console.error('Failed to initialize course search UI:', error);
             showBootstrapError('課程資料載入失敗，請稍後再試。');
@@ -1165,7 +1166,7 @@
         });
 
         const dcardButton = document.createElement('a');
-        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent((course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}&tab=post&f=feng-chia-university`;
+        dcardButton.href = `https://www.dcard.tw/f/fcu/search?query=${encodeURIComponent((course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}&tab=post`;
         dcardButton.target = '_blank';
         dcardButton.rel = 'noopener noreferrer';
         dcardButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
@@ -4533,9 +4534,6 @@ ${scoreLine}
     // 頁面載入時檢查是否已登入
     if (!getUser() || !getToken()) {
         showLoginWall();
-    } else {
-        // 已登入，延遲顯示課表選擇（等主程式載入完成）
-        setTimeout(showPlannerPicker, 1500);
     }
     renderAuth();
 })();
