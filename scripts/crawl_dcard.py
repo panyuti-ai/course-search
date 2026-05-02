@@ -51,19 +51,19 @@ for _part in DCARD_COOKIE.split(";"):
     if len(_kv) == 2:
         COOKIE_DICT[_kv[0].strip()] = _kv[1].strip()
 
-SESSION = cf_requests.Session(impersonate="chrome120")
-SESSION.headers.update({
+BASE_HEADERS = {
     "accept":          "application/json, text/plain, */*",
     "accept-language": "zh-TW,zh;q=0.9",
     "referer":         "https://www.dcard.tw/",
-})
-SESSION.cookies.update(COOKIE_DICT)
+    "user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+}
 
 
 def api_get(url: str):
     for attempt in range(3):
         try:
-            r = SESSION.get(url, timeout=15)
+            r = cf_requests.get(url, impersonate="chrome120",
+                                headers=BASE_HEADERS, cookies=COOKIE_DICT, timeout=15)
             if r.status_code == 429:
                 print("  ⚠️  rate-limit，等 10 秒後重試…")
                 time.sleep(10)
