@@ -1529,7 +1529,7 @@ ${scoreLine}
             const savedState = parseSavedPlannerState(courses);
             const fixedSourceCourses = savedState.fixedCourses.length
                 ? savedState.fixedCourses
-                : savedState.selectedCourses;
+                : (savedState.legacy ? savedState.selectedCourses : []);
             const loadedCourses = fixedSourceCourses
                 .map((course, index) => normalizePlannerInputCourse({
                     ...course,
@@ -1558,10 +1558,11 @@ ${scoreLine}
                     const fixedMatch = loadedCourses.find((fixed) =>
                         fixed.id === course.id || plannerCourseSignature(fixed) === plannerCourseSignature(course)
                     );
+                    const isFixed = Boolean(fixedMatch);
                     const selectedCourse = {
                         ...course,
-                        pinned: true,
-                        source: course.sourceKey || 'uploaded_saved',
+                        pinned: isFixed,
+                        source: isFixed ? (course.sourceKey || 'uploaded_saved') : course.sourceKey,
                         times: Array.isArray(course.timeSlots) ? course.timeSlots.slice() : []
                     };
                     state.planner.selected.set((fixedMatch || selectedCourse).id, fixedMatch || selectedCourse);
@@ -3509,6 +3510,7 @@ ${scoreLine}
             : null;
         if (!saved) {
             return {
+                legacy: true,
                 selectedCourses: courses,
                 fixedCourses: courses,
                 poolCourses: []
@@ -3524,10 +3526,9 @@ ${scoreLine}
         if (saved.studentGrade !== undefined) state.planner.studentGrade = saved.studentGrade ?? null;
 
         return {
+            legacy: false,
             selectedCourses: Array.isArray(saved.selectedCourses) ? saved.selectedCourses : [],
-            fixedCourses: Array.isArray(saved.fixedCourses) && saved.fixedCourses.length
-                ? saved.fixedCourses
-                : (Array.isArray(saved.selectedCourses) ? saved.selectedCourses : []),
+            fixedCourses: Array.isArray(saved.fixedCourses) ? saved.fixedCourses : [],
             poolCourses: Array.isArray(saved.poolCourses) ? saved.poolCourses : []
         };
     }
