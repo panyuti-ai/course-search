@@ -45,17 +45,13 @@ if not DCARD_COOKIE:
     print("   PowerShell: $env:DCARD_COOKIE='cookie值'")
     sys.exit(1)
 
-SESSION = cf_requests.Session(impersonate="chrome124")
+SESSION = cf_requests.Session(impersonate="chrome120")
 SESSION.headers.update({
     "accept":          "application/json, text/plain, */*",
     "accept-language": "zh-TW,zh;q=0.9",
     "referer":         "https://www.dcard.tw/",
+    "cookie":          DCARD_COOKIE,
 })
-# 把 cookie 字串轉成 dict
-for part in DCARD_COOKIE.split(";"):
-    kv = part.strip().split("=", 1)
-    if len(kv) == 2:
-        SESSION.cookies.set(kv[0].strip(), kv[1].strip())
 
 
 def api_get(url: str):
