@@ -1571,7 +1571,7 @@ ${scoreLine}
                 state.planner.selected.set(c.id, c);
             });
             state.planner.pool = savedState.poolCourses.length
-                ? savedState.poolCourses.map((course, index) => normalizePlannerInputCourse(course, index)).filter(Boolean)
+                ? savedState.poolCourses.map((course, index) => normalizePlannerInputCourse(course, index)).filter(Boolean).map((course) => hydrateSavedPlannerCourseFromCatalog(course))
                 : loadedCourses.slice();
             state.planner.hasPlan = true;
             renderPlanner();
@@ -2696,6 +2696,7 @@ ${scoreLine}
 
         const tags = normalizePlannerTags(item.tag ?? item.tags ?? item.classTags);
         const timeSlots = normalizePlannerTimes(
+            item.timeSlots ??
             item.times ??
             item.time ??
             item.schedule ??
@@ -3646,12 +3647,14 @@ ${scoreLine}
 
     function hydrateSavedPlannerCourseFromCatalog(course) {
         if (!course || !course.course) return course;
-        const hasTimes = Array.isArray(course.timeSlots) && course.timeSlots.length;
+        const hasTimes = (Array.isArray(course.timeSlots) && course.timeSlots.length) ||
+                         (Array.isArray(course.times) && course.times.length);
         const hasCredits = Number.isFinite(course.credits) && course.credits > 0;
         if (hasTimes && hasCredits) return course;
 
         const courseName = normalizeCourseNameForMatch(course.course);
         const teacher = normalizeCourseNameForMatch(course.teacher);
+        const getCandidateTimes = (c) => Array.isArray(c.timeSlots) && c.timeSlots.length ? c.timeSlots : (Array.isArray(c.times) ? c.times : []);
         const matches = state.courses
             .filter((candidate) => {
                 if (candidate.sourceKey !== 'fcu_scrape') return false;
@@ -3665,15 +3668,15 @@ ${scoreLine}
             .sort((a, b) => {
                 const semesterCompare = toPlannerString(b.semester).localeCompare(toPlannerString(a.semester), 'zh-Hant');
                 if (semesterCompare !== 0) return semesterCompare;
-                return (Array.isArray(b.timeSlots) ? b.timeSlots.length : 0) - (Array.isArray(a.timeSlots) ? a.timeSlots.length : 0);
+                return getCandidateTimes(b).length - getCandidateTimes(a).length;
             });
 
-        const match = matches.find((candidate) => Array.isArray(candidate.timeSlots) && candidate.timeSlots.length) || matches[0];
+        const match = matches.find((candidate) => getCandidateTimes(candidate).length) || matches[0];
         if (!match) return course;
 
         const timeSlots = hasTimes
             ? course.timeSlots
-            : (Array.isArray(match.timeSlots) ? match.timeSlots.slice() : []);
+            : getCandidateTimes(match).slice();
         const credits = hasCredits ? course.credits : match.credits;
 
         return {
