@@ -222,7 +222,9 @@
             showBootstrapError('課程資料載入失敗，請稍後再試。');
             return;
         }
-        if (getUser() && getToken()) showPlannerPicker();
+        if (localStorage.getItem('nid_token') && localStorage.getItem('nid_user')) {
+            window.showPlannerPicker?.();
+        }
     }
 
     async function loadCourses(retries = 3) {
@@ -4531,6 +4533,8 @@ ${scoreLine}
 
         document.getElementById('planner-picker-skip').addEventListener('click', () => modal.remove());
     }
+
+    window.showPlannerPicker = showPlannerPicker;
 
     // 頁面載入時檢查是否已登入
     if (!getUser() || !getToken()) {
