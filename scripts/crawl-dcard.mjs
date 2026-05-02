@@ -14,6 +14,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -51,20 +52,19 @@ function deduplicateCourses(courses) {
     });
 }
 
-function curlGet(url) {
-    // 用系統 curl，TLS 指紋與 Node.js 不同，可繞過 Cloudflare JA3 偵測
-    const cookieEscaped = DCARD_COOKIE.replace(/'/g, "'\\''");
-    const cmd = [
-        'curl.exe', '-s', '-L',
-        '--max-time', '15',
-        '-H', `"accept: application/json, text/plain, */*"`,
-        '-H', `"accept-language: zh-TW,zh;q=0.9"`,
-        '-H', `"referer: https://www.dcard.tw/"`,
-        '-H', `"user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"`,
-        '-H', `"cookie: ${DCARD_COOKIE.replace(/"/g, '\\"')}"`,
-        `"${url}"`,
-    ].join(' ');
+// 把 headers 寫到暫存檔，避免 cookie 字串在 cmd.exe 引號跳脫出錯
+const CURL_CONFIG_PATH = path.join(os.tmpdir(), 'dcard-curl.cfg');
+fs.writeFileSync(CURL_CONFIG_PATH,
+    `header = "accept: application/json, text/plain, */*"\n` +
+    `header = "accept-language: zh-TW,zh;q=0.9"\n` +
+    `header = "referer: https://www.dcard.tw/"\n` +
+    `header = "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"\n` +
+    `header = "cookie: ${DCARD_COOKIE}"\n`,
+    'utf-8'
+);
 
+function curlGet(url) {
+    const cmd = `curl.exe -s -L --max-time 15 -K "${CURL_CONFIG_PATH}" "${url}"`;
     try {
         const out = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
         if (!out || !out.trim()) return null;
