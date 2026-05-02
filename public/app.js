@@ -483,8 +483,9 @@
         const plannerSaveBtn = document.getElementById('planner-save-db');
         if (plannerSaveBtn) {
             plannerSaveBtn.addEventListener('click', async () => {
-                const courses = Array.from(state.planner.selected?.values() || []);
-                if (!courses.length) { alert('目前沒有選課，請先產生建議課表。'); return; }
+                const selectedCourses = Array.from(state.planner.selected?.values() || []);
+                if (!selectedCourses.length) { alert('目前沒有選課，請先產生建議課表。'); return; }
+                const courses = serializePlannerStateForSave();
                 const name = prompt('請輸入計畫名稱：', `排課計畫 ${new Date().toLocaleDateString('zh-TW')}`);
                 if (!name) return;
                 plannerSaveBtn.textContent = '儲存中...';
@@ -1525,7 +1526,8 @@ ${scoreLine}
         // 供課表選擇彈窗使用：載入已儲存的課表
         window.__plannerLoadCourses = function(courses) {
             if (!Array.isArray(courses)) return;
-            const loadedCourses = courses
+            const savedState = parseSavedPlannerState(courses);
+            const loadedCourses = savedState.fixedCourses
                 .map((course, index) => normalizePlannerInputCourse({
                     ...course,
                     source: course?.source || 'uploaded_saved'
@@ -1540,9 +1542,22 @@ ${scoreLine}
 
             state.planner.uploadedCourses = loadedCourses;
             state.planner.selected = new Map();
+            const selectedCourses = savedState.selectedCourses.length ? savedState.selectedCourses : loadedCourses;
+            selectedCourses
+                .map((course, index) => normalizePlannerInputCourse(course, index))
+                .filter(Boolean)
+                .forEach(c => {
+                    if (loadedCourses.some((fixed) => fixed.id === c.id || plannerCourseSignature(fixed) === plannerCourseSignature(c))) {
+                        c.pinned = true;
+                    }
+                    state.planner.selected.set(c.id, c);
+                });
             loadedCourses.forEach(c => {
                 state.planner.selected.set(c.id, c);
             });
+            state.planner.pool = savedState.poolCourses.length
+                ? savedState.poolCourses.map((course, index) => normalizePlannerInputCourse(course, index)).filter(Boolean)
+                : loadedCourses.slice();
             state.planner.hasPlan = true;
             renderPlanner();
             // 捲動到排課區塊
@@ -3459,6 +3474,47 @@ ${scoreLine}
             slotCandidates: slotCandidates.slice(0, 18),
             otherCandidates: otherCandidates.slice(0, 18),
             teacherMap
+        };
+    }
+
+    function serializePlannerStateForSave() {
+        const selected = Array.from(state.planner.selected?.values() || []);
+        return [{
+            __plannerState: 1,
+            targetCredits: state.planner.targetCredits,
+            studentGrade: state.planner.studentGrade,
+            selectedCourses: selected,
+            fixedCourses: Array.isArray(state.planner.uploadedCourses) ? state.planner.uploadedCourses : [],
+            poolCourses: Array.isArray(state.planner.pool) ? state.planner.pool : []
+        }];
+    }
+
+    function parseSavedPlannerState(courses) {
+        const saved = Array.isArray(courses) && courses.length === 1 && courses[0]?.__plannerState === 1
+            ? courses[0]
+            : null;
+        if (!saved) {
+            return {
+                selectedCourses: courses,
+                fixedCourses: courses,
+                poolCourses: []
+            };
+        }
+
+        if (Number.isFinite(saved.targetCredits)) {
+            state.planner.targetCredits = saved.targetCredits;
+            if (elements.plannerTargetCredits) {
+                elements.plannerTargetCredits.value = String(saved.targetCredits);
+            }
+        }
+        if (saved.studentGrade !== undefined) state.planner.studentGrade = saved.studentGrade ?? null;
+
+        return {
+            selectedCourses: Array.isArray(saved.selectedCourses) ? saved.selectedCourses : [],
+            fixedCourses: Array.isArray(saved.fixedCourses) && saved.fixedCourses.length
+                ? saved.fixedCourses
+                : (Array.isArray(saved.selectedCourses) ? saved.selectedCourses : []),
+            poolCourses: Array.isArray(saved.poolCourses) ? saved.poolCourses : []
         };
     }
 
