@@ -621,12 +621,22 @@ const FEEDBACK_EMAIL = process.env.FEEDBACK_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
-function createMailTransporter() {
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return null;
-  return nodemailer.createTransport({
+let mailTransporter = null;
+if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+  mailTransporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   });
+  mailTransporter.verify((err) => {
+    if (err) {
+      console.error("[email] Gmail 驗證失敗，回饋信件將無法寄出：", err.message);
+      mailTransporter = null;
+    } else {
+      console.log("[email] Gmail 連線驗證成功，回饋信件將寄至：", FEEDBACK_EMAIL);
+    }
+  });
+} else {
+  console.warn("[email] 未設定 GMAIL_USER 或 GMAIL_APP_PASSWORD，回饋信件功能已停用。");
 }
 
 app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
@@ -661,8 +671,7 @@ app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
       [type, content.trim(), sanitizedContact || null, nid]
     );
 
-    const transporter = createMailTransporter();
-    if (transporter && FEEDBACK_EMAIL) {
+    if (mailTransporter && FEEDBACK_EMAIL) {
       const mailOptions = {
         from: GMAIL_USER,
         to: FEEDBACK_EMAIL,
@@ -676,9 +685,11 @@ app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
           content.trim(),
         ].join("\n"),
       };
-      transporter.sendMail(mailOptions).catch((err) =>
-        console.error("[feedback] email send error:", err.message)
-      );
+      try {
+        await mailTransporter.sendMail(mailOptions);
+      } catch (mailErr) {
+        console.error("[feedback] 寄信失敗：", mailErr.message);
+      }
     }
 
     return res.json({ success: true });
