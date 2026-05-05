@@ -378,6 +378,77 @@
         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
     </div>
 
+    <!-- Feedback Button -->
+    <button id="feedback-btn" aria-label="意見回饋"
+        class="fixed bottom-20 right-6 w-9 h-9 bg-notion-accent text-white rounded-md flex items-center justify-center hover:opacity-90 transition-all duration-200 z-30 shadow-md"
+        title="意見回饋">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+        </svg>
+    </button>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="fixed inset-0 z-[80] flex items-center justify-center hidden">
+        <div class="absolute inset-0 bg-black/40" id="feedback-modal-overlay"></div>
+        <div class="relative w-full max-w-md mx-4 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-notion-border dark:border-dark-border overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-notion-border dark:border-dark-border">
+                <h2 class="text-base font-semibold text-notion-text dark:text-dark-text">意見回饋</h2>
+                <button id="feedback-modal-close" class="text-notion-text-secondary dark:text-dark-text-secondary hover:text-notion-text dark:hover:text-dark-text transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="feedback-form" class="px-5 py-4 flex flex-col gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-notion-text dark:text-dark-text mb-1.5">回饋類型</label>
+                    <div class="flex gap-2 flex-wrap">
+                        <label class="feedback-type-option cursor-pointer">
+                            <input type="radio" name="feedback-type" value="功能建議" class="sr-only" checked>
+                            <span class="px-3 py-1.5 text-sm rounded-md border border-notion-accent bg-notion-accent-light dark:bg-notion-accent/20 text-notion-accent font-medium transition-all duration-150 select-none">功能建議</span>
+                        </label>
+                        <label class="feedback-type-option cursor-pointer">
+                            <input type="radio" name="feedback-type" value="問題回報" class="sr-only">
+                            <span class="px-3 py-1.5 text-sm rounded-md border border-notion-border dark:border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:border-notion-accent transition-all duration-150 select-none">問題回報</span>
+                        </label>
+                        <label class="feedback-type-option cursor-pointer">
+                            <input type="radio" name="feedback-type" value="其他" class="sr-only">
+                            <span class="px-3 py-1.5 text-sm rounded-md border border-notion-border dark:border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:border-notion-accent transition-all duration-150 select-none">其他</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="feedback-content" class="block text-sm font-medium text-notion-text dark:text-dark-text mb-1.5">內容 <span class="text-notion-red">*</span></label>
+                    <textarea id="feedback-content" rows="5" maxlength="2000"
+                        placeholder="請描述你的建議或遇到的問題..."
+                        class="w-full px-3 py-2.5 text-sm bg-notion-bg-secondary dark:bg-dark-bg border border-notion-border dark:border-dark-border rounded-lg text-notion-text dark:text-dark-text placeholder-notion-text-secondary dark:placeholder-dark-text-secondary focus:border-notion-accent focus:ring-1 focus:ring-notion-accent/30 outline-none resize-none transition-colors duration-200"></textarea>
+                    <p id="feedback-char-count" class="text-xs text-notion-text-secondary dark:text-dark-text-secondary mt-1 text-right">0 / 2000</p>
+                </div>
+                <div>
+                    <label for="feedback-contact" class="block text-sm font-medium text-notion-text dark:text-dark-text mb-1.5">聯絡方式 <span class="text-notion-text-secondary dark:text-dark-text-secondary font-normal text-xs">（選填，方便開發者回覆）</span></label>
+                    <input type="text" id="feedback-contact" maxlength="200"
+                        placeholder="Email 或其他聯絡方式"
+                        class="w-full px-3 py-2.5 text-sm bg-notion-bg-secondary dark:bg-dark-bg border border-notion-border dark:border-dark-border rounded-lg text-notion-text dark:text-dark-text placeholder-notion-text-secondary dark:placeholder-dark-text-secondary focus:border-notion-accent focus:ring-1 focus:ring-notion-accent/30 outline-none transition-colors duration-200">
+                </div>
+                <div id="feedback-error" class="hidden text-sm text-notion-red bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2"></div>
+                <button type="submit" id="feedback-submit"
+                    class="w-full py-2.5 text-sm font-medium bg-notion-accent text-white rounded-lg hover:opacity-90 transition-opacity duration-150 disabled:opacity-50 disabled:cursor-not-allowed">
+                    送出回饋
+                </button>
+            </form>
+            <div id="feedback-success" class="hidden px-5 py-8 flex flex-col items-center gap-3 text-center">
+                <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-notion-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <p class="text-base font-semibold text-notion-text dark:text-dark-text">感謝你的回饋！</p>
+                <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary">你的意見已送出，開發者會盡快查看。</p>
+                <button id="feedback-success-close" class="mt-2 px-4 py-2 text-sm font-medium bg-notion-accent text-white rounded-lg hover:opacity-90 transition-opacity">關閉</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Back to Top -->
     <button id="back-to-top" aria-label="回到頂部"
         class="fixed bottom-6 right-6 w-9 h-9 bg-notion-text dark:bg-dark-text text-white dark:text-dark-bg rounded-md flex items-center justify-center text-sm hover:opacity-80 transition-all duration-200 opacity-0 invisible z-30">

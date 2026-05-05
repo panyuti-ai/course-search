@@ -4542,3 +4542,104 @@ ${scoreLine}
     }
     renderAuth();
 })();
+
+// ── 意見回饋 ──────────────────────────────────────────────
+(function initFeedback() {
+    const btn = document.getElementById('feedback-btn');
+    const modal = document.getElementById('feedback-modal');
+    const overlay = document.getElementById('feedback-modal-overlay');
+    const closeBtn = document.getElementById('feedback-modal-close');
+    const form = document.getElementById('feedback-form');
+    const textarea = document.getElementById('feedback-content');
+    const charCount = document.getElementById('feedback-char-count');
+    const errorBox = document.getElementById('feedback-error');
+    const successPanel = document.getElementById('feedback-success');
+    const successClose = document.getElementById('feedback-success-close');
+    const submitBtn = document.getElementById('feedback-submit');
+
+    function openModal() {
+        modal.classList.remove('hidden');
+        form.classList.remove('hidden');
+        successPanel.classList.add('hidden');
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    btn.addEventListener('click', openModal);
+    overlay.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    successClose.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    textarea.addEventListener('input', () => {
+        charCount.textContent = `${textarea.value.length} / 2000`;
+    });
+
+    document.querySelectorAll('.feedback-type-option input').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            document.querySelectorAll('.feedback-type-option span').forEach((span) => {
+                span.className = 'px-3 py-1.5 text-sm rounded-md border border-notion-border dark:border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:border-notion-accent transition-all duration-150 select-none';
+            });
+            const activeSpan = radio.closest('label').querySelector('span');
+            activeSpan.className = 'px-3 py-1.5 text-sm rounded-md border border-notion-accent bg-notion-accent-light dark:bg-notion-accent/20 text-notion-accent font-medium transition-all duration-150 select-none';
+        });
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+
+        const type = document.querySelector('input[name="feedback-type"]:checked')?.value;
+        const content = textarea.value.trim();
+        const contact = document.getElementById('feedback-contact').value.trim();
+
+        if (!content) {
+            errorBox.textContent = '請填寫回饋內容。';
+            errorBox.classList.remove('hidden');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '送出中...';
+
+        try {
+            const token = localStorage.getItem('nid_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch('/api/feedback', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ type, content, contact: contact || undefined }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || '送出失敗，請稍後再試。');
+
+            form.classList.add('hidden');
+            successPanel.classList.remove('hidden');
+            form.reset();
+            charCount.textContent = '0 / 2000';
+            document.querySelectorAll('.feedback-type-option span').forEach((span, i) => {
+                span.className = i === 0
+                    ? 'px-3 py-1.5 text-sm rounded-md border border-notion-accent bg-notion-accent-light dark:bg-notion-accent/20 text-notion-accent font-medium transition-all duration-150 select-none'
+                    : 'px-3 py-1.5 text-sm rounded-md border border-notion-border dark:border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:border-notion-accent transition-all duration-150 select-none';
+            });
+        } catch (err) {
+            errorBox.textContent = err.message;
+            errorBox.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '送出回饋';
+        }
+    });
+}());

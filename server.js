@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import pg from "pg";
+import nodemailer from "nodemailer";
 const { Pool } = pg;
 
 dotenv.config();
@@ -62,6 +63,14 @@ async function initDB() {
       post_count INT DEFAULT 0,
       crawled_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(course, teacher)
+    );
+    CREATE TABLE IF NOT EXISTS feedbacks (
+      id         SERIAL PRIMARY KEY,
+      type       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      contact    TEXT,
+      nid        TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
   console.log("DB tables ready");
@@ -597,6 +606,86 @@ app.put("/api/planners/:id", requireAuth, async (req, res) => {
 app.delete("/api/planners/:id", requireAuth, async (req, res) => {
   await pool.query("DELETE FROM planners WHERE id=$1 AND nid=$2", [req.params.id, req.user.nid]);
   res.json({ success: true });
+});
+
+// ── 意見回饋 API ──────────────────────────────────────────
+const feedbackRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "提交過於頻繁，請稍後再試。" },
+});
+
+const FEEDBACK_EMAIL = process.env.FEEDBACK_EMAIL;
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
+
+function createMailTransporter() {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return null;
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+  });
+}
+
+app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
+  const { type, content, contact } = req.body || {};
+
+  const validTypes = ["功能建議", "問題回報", "其他"];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: "回饋類型不正確。" });
+  }
+  if (!content || typeof content !== "string" || !content.trim()) {
+    return res.status(400).json({ error: "請填寫回饋內容。" });
+  }
+  if (content.trim().length > 2000) {
+    return res.status(400).json({ error: "回饋內容不得超過 2000 字。" });
+  }
+
+  // 取得登入者 nid（選填）
+  let nid = null;
+  try {
+    const auth = req.headers.authorization;
+    if (auth?.startsWith("Bearer ")) {
+      const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+      nid = decoded.nid || null;
+    }
+  } catch {}
+
+  const sanitizedContact = typeof contact === "string" ? contact.trim().slice(0, 200) : null;
+
+  try {
+    await pool.query(
+      "INSERT INTO feedbacks (type, content, contact, nid) VALUES ($1,$2,$3,$4)",
+      [type, content.trim(), sanitizedContact || null, nid]
+    );
+
+    const transporter = createMailTransporter();
+    if (transporter && FEEDBACK_EMAIL) {
+      const mailOptions = {
+        from: GMAIL_USER,
+        to: FEEDBACK_EMAIL,
+        subject: `[選課助手回饋] ${type}`,
+        text: [
+          `類型：${type}`,
+          `提交者 NID：${nid || "（未登入）"}`,
+          `聯絡方式：${sanitizedContact || "（未填寫）"}`,
+          "",
+          "內容：",
+          content.trim(),
+        ].join("\n"),
+      };
+      transporter.sendMail(mailOptions).catch((err) =>
+        console.error("[feedback] email send error:", err.message)
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("feedback error:", error);
+    return res.status(500).json({ error: "伺服器處理時發生錯誤，請稍後再試。" });
+  }
 });
 
 app.use(express.static(STATIC_DIR));
