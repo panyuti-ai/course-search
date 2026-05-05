@@ -685,11 +685,9 @@ app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
           content.trim(),
         ].join("\n"),
       };
-      try {
-        await mailTransporter.sendMail(mailOptions);
-      } catch (mailErr) {
-        console.error("[feedback] 寄信失敗：", mailErr.message);
-      }
+      mailTransporter.sendMail(mailOptions).catch((mailErr) =>
+        console.error("[feedback] 寄信失敗：", mailErr.message)
+      );
     }
 
     return res.json({ success: true });
