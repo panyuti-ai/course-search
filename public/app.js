@@ -205,6 +205,14 @@
         return;
     }
 
+    // Re-render dynamic content when language changes
+    document.addEventListener('langchange', () => {
+        if (state.hasSearched) runSearch({ force: true });
+        updateFavoritesUI();
+        renderPlanner();
+        populateFilters();
+    });
+
     init();
 
     async function init() {
@@ -219,7 +227,7 @@
             runSearch({ force: true });
         } catch (error) {
             console.error('Failed to initialize course search UI:', error);
-            showBootstrapError('課程資料載入失敗，請稍後再試。');
+            showBootstrapError(t('load-failed'));
             return;
         }
         if (localStorage.getItem('nid_token') && localStorage.getItem('nid_user')) {
@@ -488,15 +496,15 @@
         if (plannerSaveBtn) {
             plannerSaveBtn.addEventListener('click', async () => {
                 const selectedCourses = Array.from(state.planner.selected?.values() || []);
-                if (!selectedCourses.length) { alert('目前沒有選課，請先產生建議課表。'); return; }
+                if (!selectedCourses.length) { alert(t('no-courses-alert')); return; }
                 const courses = serializePlannerStateForSave();
-                const name = prompt('請輸入計畫名稱：', `排課計畫 ${new Date().toLocaleDateString('zh-TW')}`);
+                const name = prompt(t('enter-plan-name'), `${t('default-plan-name')} ${new Date().toLocaleDateString()}`);
                 if (!name) return;
-                plannerSaveBtn.textContent = '儲存中...';
+                plannerSaveBtn.textContent = t('saving');
                 plannerSaveBtn.disabled = true;
                 await window.savePlannerToDB?.(name, courses);
-                plannerSaveBtn.textContent = '已儲存！';
-                setTimeout(() => { plannerSaveBtn.textContent = '儲存課表'; plannerSaveBtn.disabled = false; }, 2000);
+                plannerSaveBtn.textContent = t('saved');
+                setTimeout(() => { plannerSaveBtn.textContent = t('save-btn'); plannerSaveBtn.disabled = false; }, 2000);
             });
         }
         if (elements.plannerReset) {
@@ -650,7 +658,7 @@
             container.innerHTML = '';
             const emptySpan = document.createElement('span');
             emptySpan.className = 'text-xs text-notion-text-secondary';
-            emptySpan.textContent = '暫無標籤';
+            emptySpan.textContent = t('no-tags');
             container.appendChild(emptySpan);
             return;
         }
@@ -740,7 +748,7 @@
         const message = document.createElement('div');
         message.className = 'col-span-full py-12 text-center text-sm text-notion-text-secondary dark:text-dark-text-secondary rounded-lg border border-dashed border-notion-border dark:border-dark-border';
         const p = document.createElement('p');
-        p.textContent = '輸入關鍵字並按下搜尋，即可開始查找課程。';
+        p.textContent = t('search-prompt');
         message.appendChild(p);
         container.appendChild(message);
         elements.resultsSummary.classList.add('hidden');
@@ -899,9 +907,7 @@
             const message = document.createElement('div');
             message.className = 'col-span-full py-12 text-center text-sm text-notion-text-secondary dark:text-dark-text-secondary rounded-lg border border-dashed border-notion-border dark:border-dark-border';
             const p = document.createElement('p');
-            p.textContent = state.hasSearched
-                ? '找不到符合條件的課程，試著調整搜尋或放寬篩選條件。'
-                : '輸入關鍵字即可開始搜尋課程。';
+            p.textContent = state.hasSearched ? t('no-results') : t('start-search');
             message.appendChild(p);
             container.appendChild(message);
             return;
@@ -935,7 +941,7 @@
             const loadMore = document.createElement('button');
             loadMore.type = 'button';
             loadMore.className = 'load-more-btn col-span-full mx-auto px-6 py-2.5 rounded-md text-sm font-medium bg-notion-bg-secondary dark:bg-dark-bg-secondary text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border border border-notion-border dark:border-dark-border transition-colors duration-100';
-            loadMore.textContent = `載入更多（還有 ${courses.length - end} 門）`;
+            loadMore.textContent = t('load-more', { n: courses.length - end });
             loadMore.addEventListener('click', () => renderMoreResults());
             container.appendChild(loadMore);
         }
@@ -1014,7 +1020,8 @@
 
     function formatCourseTimes(times) {
         if (!Array.isArray(times) || times.length === 0) return null;
-        const DAY_ZH = { MON: '一', TUE: '二', WED: '三', THU: '四', FRI: '五', SAT: '六', SUN: '日' };
+        const days = window.i18nDays ? window.i18nDays() : { MON: '一', TUE: '二', WED: '三', THU: '四', FRI: '五', SAT: '六', SUN: '日' };
+        const prefix = window.i18nDayPrefix ? window.i18nDayPrefix() : '週';
         const grouped = {};
         for (const slot of times) {
             const m = slot.match(/^([A-Z]+)(\d+)$/);
@@ -1028,7 +1035,6 @@
             .filter(d => grouped[d])
             .map(d => {
                 const periods = grouped[d].sort((a, b) => a - b);
-                // Compress consecutive periods into ranges
                 const ranges = [];
                 let start = periods[0], end = periods[0];
                 for (let i = 1; i < periods.length; i++) {
@@ -1036,7 +1042,7 @@
                     else { ranges.push(start === end ? `${start}` : `${start}-${end}`); start = end = periods[i]; }
                 }
                 ranges.push(start === end ? `${start}` : `${start}-${end}`);
-                return `週${DAY_ZH[d] || d}(${ranges.join(',')})`;
+                return `${prefix}${days[d] || d}(${ranges.join(',')})`;
             })
             .join(' ');
     }
@@ -1047,7 +1053,7 @@
 
         const timesStr = formatCourseTimes(course.times);
         if (timesStr) {
-            stats.appendChild(createStatLine('時段', timesStr));
+            stats.appendChild(createStatLine(t('time-slot'), timesStr));
         }
 
         return stats;
@@ -1135,14 +1141,14 @@
         favoriteButton.style.backgroundColor = '#E57373';
         favoriteButton.addEventListener('mouseover', () => { favoriteButton.style.backgroundColor = '#C62828'; });
         favoriteButton.addEventListener('mouseout', () => { favoriteButton.style.backgroundColor = '#E57373'; });
-        favoriteButton.textContent = state.favorites.has(course.id) ? '取消收藏' : '收藏';
+        favoriteButton.textContent = state.favorites.has(course.id) ? t('unfavorite') : t('favorite');
         favoriteButton.addEventListener('click', () => {
             toggleFavorite(course);
-            favoriteButton.textContent = state.favorites.has(course.id) ? '取消收藏' : '收藏';
+            favoriteButton.textContent = state.favorites.has(course.id) ? t('unfavorite') : t('favorite');
             if (state.favorites.has(course.id)) {
-                showToast('已加入收藏', 'success');
+                showToast(t('toast-favorited'), 'success');
             } else {
-                showToast('已取消收藏', 'success');
+                showToast(t('toast-unfavorited'), 'success');
             }
         });
 
@@ -1152,7 +1158,7 @@
         shareButton.style.backgroundColor = '#5A5A5A';
         shareButton.addEventListener('mouseover', () => { shareButton.style.backgroundColor = '#3A3A3A'; });
         shareButton.addEventListener('mouseout', () => { shareButton.style.backgroundColor = '#5A5A5A'; });
-        shareButton.textContent = '分享';
+        shareButton.textContent = t('share');
         shareButton.addEventListener('click', () => {
             shareCourse(course);
         });
@@ -1163,7 +1169,7 @@
         const aiButton = document.createElement('button');
         aiButton.type = 'button';
         aiButton.className = 'flex-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-notion-accent text-white hover:bg-[#2899c8] transition-colors duration-100';
-        aiButton.textContent = 'AI 評估';
+        aiButton.textContent = t('ai-evaluate');
         aiButton.addEventListener('click', () => {
             performAnalysis(course, aiResult, aiButton);
         });
@@ -1176,7 +1182,7 @@
         dcardButton.style.backgroundColor = '#006AFF';
         dcardButton.addEventListener('mouseover', () => { dcardButton.style.backgroundColor = '#0055CC'; });
         dcardButton.addEventListener('mouseout', () => { dcardButton.style.backgroundColor = '#006AFF'; });
-        dcardButton.textContent = 'Dcard 心得';
+        dcardButton.textContent = t('dcard-review');
 
         actionsRow.append(favoriteButton, shareButton, dcardButton, aiButton);
 
@@ -1234,12 +1240,12 @@
             addToPlanBtn.disabled = false;
 
             if (!hasPdfUploaded()) {
-                addToPlanBtn.textContent = '＋ 加入規劃（請先上傳 PDF）';
+                addToPlanBtn.textContent = t('add-to-plan-no-pdf');
                 return;
             }
 
             if (!Array.isArray(course.times) || !course.times.length) {
-                addToPlanBtn.textContent = '本學期未開課';
+                addToPlanBtn.textContent = t('not-offered');
                 addToPlanBtn.disabled = true;
                 addToPlanBtn.style.opacity = '0.5';
                 return;
@@ -1250,7 +1256,7 @@
 
             if (match) {
                 if (state.planner.selected.has(match.id)) {
-                    addToPlanBtn.textContent = '✓ 已在規劃中';
+                    addToPlanBtn.textContent = t('in-plan');
                     addToPlanBtn.disabled = true;
                     addToPlanBtn.style.opacity = '0.5';
                     return;
@@ -1262,7 +1268,7 @@
                     if (!checkMap.has(ucEntry.id)) checkMap.set(ucEntry.id, ucEntry);
                 });
                 if (hasPlannerConflictWithSelected(match, checkMap)) {
-                    addToPlanBtn.textContent = '✗ 衝堂無法加入';
+                    addToPlanBtn.textContent = t('conflict');
                     addToPlanBtn.disabled = true;
                     addToPlanBtn.style.opacity = '0.5';
                     return;
@@ -1271,13 +1277,13 @@
                     (s) => s.course === course.course && s.id !== match.id
                 );
                 if (sameName) {
-                    addToPlanBtn.textContent = '✗ 同名課程已加入';
+                    addToPlanBtn.textContent = t('same-name-conflict');
                     addToPlanBtn.disabled = true;
                     addToPlanBtn.style.opacity = '0.5';
                     return;
                 }
             }
-            addToPlanBtn.textContent = '＋ 加入規劃';
+            addToPlanBtn.textContent = t('add-to-plan');
         }
 
         ensurePlannerUpdatedListener();
@@ -1286,12 +1292,12 @@
 
         addToPlanBtn.addEventListener('click', () => {
             if (!hasPdfUploaded()) {
-                showToast('請先在課程規劃區上傳 PDF 課表。', 'error');
+                showToast(t('please-upload-pdf'), 'error');
                 return;
             }
 
             if (!Array.isArray(course.times) || !course.times.length) {
-                showToast('此課程本學期無時段資料，可能未開課。', 'error');
+                showToast(t('no-time-data'), 'error');
                 return;
             }
 
@@ -1309,7 +1315,7 @@
             }
 
             if (state.planner.selected.has(entry.id)) {
-                showToast('此課程已在規劃中。', 'error');
+                showToast(t('already-in-plan'), 'error');
                 return;
             }
 
@@ -1320,22 +1326,20 @@
                     || { ...uc, id: `uploaded-check|${i}`, timeSlots: normalizePlannerTimes(uc.times || []) };
                 if (!checkMap.has(ucEntry.id)) checkMap.set(ucEntry.id, ucEntry);
             });
-            console.log('[衝堂檢查] entry.timeSlots:', entry.timeSlots);
-            console.log('[衝堂檢查] uploadedCourses slots:', Array.from(checkMap.values()).map(c => ({ course: c.course, timeSlots: c.timeSlots })));
             if (hasPlannerConflictWithSelected(entry, checkMap)) {
-                showToast('此課程與已辨識課程衝堂，無法加入。', 'error');
+                showToast(t('conflict-with-uploaded'), 'error');
                 return;
             }
             const sameName = Array.from(state.planner.selected.values()).some(
                 (s) => s.course === course.course && s.id !== entry.id
             );
             if (sameName) {
-                showToast('已有同名課程在規劃中。', 'error');
+                showToast(t('same-name-in-plan'), 'error');
                 return;
             }
             state.planner.selected.set(entry.id, entry);
             renderPlanner();
-            showToast(`「${course.course}」已加入規劃。`, 'success');
+            showToast(t('added-to-plan', { name: course.course }), 'success');
         });
 
         addToPlanRow.appendChild(addToPlanBtn);
@@ -1371,19 +1375,16 @@
     function shareCourse(course) {
         const isDuplicate = course.difficulty !== null && String(course.difficulty) === String(course.score);
         const scoreLine = isDuplicate
-            ? `評分：${course.score || '－'}`
-            : `分數：${course.score || '－'}\n難度：${course.difficulty !== null ? course.difficulty : '未提供'}`;
-        const text = `
-【${course.course}】
-教師：${course.teacher || '未提供'}
-${scoreLine}
-評價：${course.review || '無'}
-`.trim();
+            ? `${t('score')}：${course.score || '－'}`
+            : `${t('score-rating')}：${course.score || '－'}\n${t('difficulty')}：${course.difficulty !== null ? course.difficulty : t('teacher-unknown')}`;
+        const teacherLabel = window.getCurrentLang?.() === 'zh-Hant' ? '教師' : t('teacher-unknown').replace(/未.*/, '');
+        const reviewLabel = window.getCurrentLang?.() === 'ja' ? 'レビュー' : 'review';
+        const text = `【${course.course}】\n${teacherLabel}：${course.teacher || t('teacher-unknown')}\n${scoreLine}`.trim();
 
         navigator.clipboard.writeText(text).then(() => {
-            showToast('課程資訊已複製', 'success');
+            showToast(t('copied'), 'success');
         }).catch(() => {
-            showToast('複製失敗', 'error');
+            showToast(t('copy-failed'), 'error');
         });
     }
 
@@ -1417,8 +1418,8 @@ ${scoreLine}
         if (state.favorites.size === 0) elements.favoritesCount.classList.add('scale-0');
 
         elements.favoritesSummary.textContent = state.favorites.size
-            ? `已收藏 ${state.favorites.size} 門課程`
-            : '尚未收藏任何課程';
+            ? t('favorites-count', { n: state.favorites.size })
+            : t('no-favorites');
         renderFavoritesList();
     }
 
@@ -1428,7 +1429,7 @@ ${scoreLine}
         if (!state.favorites.size) {
             const empty = document.createElement('p');
             empty.className = 'text-center text-notion-text-secondary dark:text-dark-text-secondary text-xs py-8';
-            empty.textContent = '將感興趣的課程加入收藏後，可快速建立比較清單。';
+            empty.textContent = t('favorites-empty-hint');
             container.appendChild(empty);
             return;
         }
@@ -1450,7 +1451,7 @@ ${scoreLine}
 
         const meta = document.createElement('p');
         meta.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary';
-        meta.textContent = course.teacher ? course.teacher : '教師未提供';
+        meta.textContent = course.teacher ? course.teacher : t('teacher-unknown');
         card.appendChild(meta);
 
         const stats = document.createElement('div');
@@ -1458,11 +1459,11 @@ ${scoreLine}
         const diffValue = course.difficulty !== null ? String(course.difficulty) : null;
         const isDuplicate = diffValue !== null && diffValue === String(course.score);
         if (isDuplicate) {
-            stats.appendChild(createStatLine('評分', course.score || '－', 'score-accent'));
+            stats.appendChild(createStatLine(t('score'), course.score || '－', 'score-accent'));
         } else {
-            stats.appendChild(createStatLine('分數', course.score || '－', 'score-accent'));
+            stats.appendChild(createStatLine(t('score-rating'), course.score || '－', 'score-accent'));
             if (course.difficulty !== null) {
-                stats.appendChild(createStatLine('難度', course.difficulty));
+                stats.appendChild(createStatLine(t('difficulty'), course.difficulty));
             }
         }
         card.appendChild(stats);
@@ -1470,7 +1471,7 @@ ${scoreLine}
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'text-xs text-notion-red hover:underline self-start mt-1 font-medium';
-        removeButton.textContent = '移除';
+        removeButton.textContent = t('remove');
         removeButton.addEventListener('click', () => {
             state.favorites.delete(course.id);
             saveFavorites();
@@ -1511,7 +1512,7 @@ ${scoreLine}
 
     function clearFavorites() {
         if (!state.favorites.size) return;
-        if (!confirm('確定要清空收藏清單嗎？')) return;
+        if (!confirm(t('confirm-clear-favorites'))) return;
         state.favorites.clear();
         saveFavorites();
         updateFavoritesUI();
@@ -1589,27 +1590,27 @@ ${scoreLine}
         const fileButton = document.getElementById('planner-file-btn');
         const fileNameEl = document.getElementById('planner-file-name');
         const uploadedCreditsEl = document.getElementById('planner-uploaded-credits');
-        const originalButtonText = fileButton?.textContent || '選擇檔案';
+        const originalButtonText = fileButton?.textContent || t('choose-file');
 
         try {
             if (!isPlannerPdfFile(file)) {
-                throw new Error('僅支援 PDF 檔案，請上傳課表 PDF。');
+                throw new Error(t('pdf-only'));
             }
 
             if (fileButton) {
                 fileButton.disabled = true;
-                fileButton.textContent = '辨識中...';
+                fileButton.textContent = t('recognizing');
                 fileButton.classList.add('opacity-60', 'cursor-not-allowed');
             }
-            if (fileNameEl) fileNameEl.textContent = `${file.name}（AI 辨識中...）`;
+            if (fileNameEl) fileNameEl.textContent = `${file.name}（${t('ai-recognizing')}）`;
             if (uploadedCreditsEl) {
-                uploadedCreditsEl.textContent = '正在用 AI 辨識課表，可能需要幾秒鐘...';
+                uploadedCreditsEl.textContent = t('ai-recognizing-hint');
                 uploadedCreditsEl.classList.remove('hidden');
             }
 
             const parsed = await parsePlannerPdfFile(file);
             if (!parsed.courses.length) {
-                throw new Error('PDF 解析不到課程資料，請改用其他課表 PDF。');
+                throw new Error(t('pdf-no-courses'));
             }
 
             // Enrich parsed courses with credits from fcu_courses catalog
@@ -1625,13 +1626,14 @@ ${scoreLine}
             const totalCredits = enriched.reduce((sum, c) => sum + (c.credits || 0), 0);
             if (uploadedCreditsEl) {
                 const grade = state.planner.studentGrade;
-                const gradeText = grade ? `（${grade} 年級）` : '';
+                const gradeText = grade ? t('grade-label', { g: grade }) : '';
                 const minCredits = grade && grade >= 4 ? 9 : 12;
                 const minHint = grade
-                    ? `，逢甲規定${grade >= 4 ? '四、五' : '一至三'}年級每學期至少 ${minCredits} 學分`
+                    ? t(grade >= 4 ? 'grade-hint-upper' : 'grade-hint-lower', { min: minCredits })
                     : '';
-                uploadedCreditsEl.textContent =
-                    `已辨識 ${enriched.length} 門課${gradeText}，本學期已修學分：${totalCredits} 學分${minHint}`;
+                uploadedCreditsEl.textContent = t('recognized-courses', {
+                    n: enriched.length, grade: gradeText, credits: totalCredits, hint: minHint
+                });
                 uploadedCreditsEl.classList.remove('hidden');
             }
 
@@ -1640,19 +1642,16 @@ ${scoreLine}
             renderPlanner();
 
             if (parsed.warnings.length) {
-                showToast(
-                    `已從 ${file.name} 解析 ${parsed.courses.length} 門課程（${parsed.warnings[0]}）`,
-                    'success'
-                );
+                showToast(t('pdf-parsed-warn', { file: file.name, n: parsed.courses.length, warn: parsed.warnings[0] }), 'success');
             } else {
-                showToast(`已從 ${file.name} 解析 ${parsed.courses.length} 門課程`, 'success');
+                showToast(t('pdf-parsed', { file: file.name, n: parsed.courses.length }), 'success');
             }
         } catch (error) {
             console.error('Failed to read planner file:', error);
             state.planner.uploadedCourses = [];
-            if (fileNameEl) fileNameEl.textContent = '未選擇任何檔案';
+            if (fileNameEl) fileNameEl.textContent = t('no-file-selected');
             if (uploadedCreditsEl) uploadedCreditsEl.classList.add('hidden');
-            showToast(error.message || '讀取 PDF 失敗，請稍後再試。', 'error');
+            showToast(error.message || t('pdf-read-failed'), 'error');
         } finally {
             if (fileButton) {
                 fileButton.disabled = false;
@@ -1684,7 +1683,7 @@ ${scoreLine}
 
     async function parsePlannerPdfFile(file) {
         if (file.size > 10 * 1024 * 1024) {
-            throw new Error('PDF 檔案過大，請上傳 10MB 以下的課表 PDF。');
+            throw new Error(t('pdf-too-large'));
         }
 
         const fileData = await fileToDataUrl(file);
@@ -2559,7 +2558,7 @@ ${scoreLine}
     async function generatePlannerRecommendation() {
         const userContext = elements.userContext?.value?.trim() || '';
         if (!userContext) {
-            showToast('請先填寫「背景補充說明」，再產生建議課表。', 'error');
+            showToast(t('fill-bg-first'), 'error');
             elements.userContext?.focus();
             elements.userContext?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
@@ -2567,18 +2566,18 @@ ${scoreLine}
 
         const targetCreditsRaw = elements.plannerTargetCredits?.value?.trim();
         if (!targetCreditsRaw) {
-            showToast('請先輸入本學期目標學分，再產生建議課表。', 'error');
+            showToast(t('fill-credits-first'), 'error');
             elements.plannerTargetCredits?.focus();
             return;
         }
         const targetCredits = Number(targetCreditsRaw);
         if (!Number.isFinite(targetCredits) || targetCredits < 1) {
-            showToast('目標學分必須為正整數（例如 18）。', 'error');
+            showToast(t('credits-must-positive'), 'error');
             elements.plannerTargetCredits?.focus();
             return;
         }
         if (targetCredits > 30) {
-            showToast('逢甲大學每學期最多修 30 學分，請重新設定目標學分。', 'error');
+            showToast(t('credits-max-30'), 'error');
             elements.plannerTargetCredits?.focus();
             return;
         }
@@ -2586,13 +2585,7 @@ ${scoreLine}
         const uploadedCredits = (state.planner.uploadedCourses || [])
             .reduce((sum, c) => sum + (Number.isFinite(c.credits) ? c.credits : 0), 0);
         if (uploadedCredits > targetCredits) {
-            const grade = state.planner.studentGrade;
-            const minCredits = grade && grade >= 4 ? 9 : 12;
-            showToast(
-                `本學期已修學分（${uploadedCredits}）已超過目標（${targetCredits}）。` +
-                (grade ? `逢甲規定${grade >= 4 ? '四、五' : '一至三'}年級每學期至少需修 ${minCredits} 學分。` : ''),
-                'error'
-            );
+            showToast(t('credits-exceed', { uploaded: uploadedCredits, target: targetCredits }), 'error');
             return;
         }
         state.planner.targetCredits = targetCredits;
@@ -2602,7 +2595,7 @@ ${scoreLine}
             state.planner.hasPlan = false;
             state.planner.pool = [];
             state.planner.selected = new Map();
-            state.planner.warnings = ['找不到可用課程資料，請先上傳課表 PDF。'];
+            state.planner.warnings = [t('no-courses-pool')];
             renderPlanner();
             return;
         }
@@ -2611,7 +2604,7 @@ ${scoreLine}
         const btn = elements.plannerGenerate;
         if (btn) {
             btn.disabled = true;
-            btn.textContent = 'AI 分析中…';
+            btn.textContent = t('ai-analyzing');
         }
 
         // 呼叫 API 取得關鍵字
@@ -2645,15 +2638,15 @@ ${scoreLine}
         // 冷卻倒數（API 呼叫完成後才開始倒數）
         if (btn) {
             let remaining = 3;
-            btn.textContent = `請稍候 (${remaining}s)`;
+            btn.textContent = t('wait-seconds', { n: remaining });
             const timer = setInterval(() => {
                 remaining--;
                 if (remaining <= 0) {
                     clearInterval(timer);
                     btn.disabled = false;
-                    btn.textContent = '產生建議課表';
+                    btn.textContent = t('generate-btn');
                 } else {
-                    btn.textContent = `請稍候 (${remaining}s)`;
+                    btn.textContent = t('wait-seconds', { n: remaining });
                 }
             }, 1000);
         }
@@ -3040,7 +3033,7 @@ ${scoreLine}
         if (!course) return;
         if (state.planner.selected.has(course.id)) return;
         if (hasPlannerConflictWithSelected(course, state.planner.selected)) {
-            showToast('此課程與目前課表衝堂，無法加入。', 'error');
+            showToast(t('conflict-planner'), 'error');
             return;
         }
         state.planner.selected.set(course.id, course);
@@ -3051,7 +3044,7 @@ ${scoreLine}
         const course = state.planner.selected.get(courseId);
         if (!course) return;
         if (course.pinned) {
-            showToast('已上傳課程無法移除，請重新上傳 PDF。', 'error');
+            showToast(t('pinned-no-remove'), 'error');
             return;
         }
         state.planner.selected.delete(courseId);
@@ -3082,9 +3075,9 @@ ${scoreLine}
 
         if (!state.planner.hasPlan) {
             const warningText = state.planner.warnings.length ? `（${state.planner.warnings.join(' ')}）` : '';
-            summary.textContent = `尚未產生課表，請先上傳課表 PDF，並設定目標學分。${warningText}`;
-            selectedContainer.appendChild(createPlannerEmptyState('尚未有建議課表。'));
-            candidateContainer.appendChild(createPlannerEmptyState('尚未有可加入課程。'));
+            summary.textContent = `${t('planner-no-plan')}${warningText}`;
+            selectedContainer.appendChild(createPlannerEmptyState(t('planner-empty-selected')));
+            candidateContainer.appendChild(createPlannerEmptyState(t('planner-empty-candidate')));
             renderPlannerTimetable();
             return;
         }
@@ -3100,30 +3093,23 @@ ${scoreLine}
         const unknownTimeCount = selectedList.filter((course) => !course.timeSlots.length).length;
 
         const warnings = state.planner.warnings.filter(Boolean);
-        const warningText = warnings.length ? `。提醒：${warnings.join(' ')}` : '';
-        const unknownTimeText = unknownTimeCount
-            ? `。其中 ${unknownTimeCount} 門課缺少節次，無法完整檢查衝堂`
-            : '';
-        const grade = state.planner.studentGrade;
-        const minCredits = grade && grade >= 4 ? 9 : 12;
-        const gradeWarning = grade && selectedCredits < minCredits
-            ? `。⚠️ 注意：逢甲規定${grade >= 4 ? '四、五' : '一至三'}年級每學期至少需修 ${minCredits} 學分（目前僅 ${selectedCredits} 學分）`
-            : '';
+        const warningText = warnings.length ? `。${warnings.join(' ')}` : '';
+        const unknownTimeText = '';
         summary.textContent =
-            `目前已排 ${selectedList.length} 門課，共 ${selectedCredits} 學分（目標 ${targetCredits}）` +
-            (missingCredits > 0 ? `，尚差 ${missingCredits} 學分` : '，已達成目標') +
-            `${gradeWarning}${unknownTimeText}${warningText}`;
+            t('planner-summary', { count: selectedList.length, credits: selectedCredits, target: targetCredits }) +
+            (missingCredits > 0 ? t('planner-short', { n: missingCredits }) : t('planner-done')) +
+            `${unknownTimeText}${warningText}`;
 
         if (!selectedList.length) {
-            selectedContainer.appendChild(createPlannerEmptyState('沒有選到課程，請放寬條件或提高可選課程數量。'));
+            selectedContainer.appendChild(createPlannerEmptyState(t('planner-no-selected')));
         } else {
             const fragment = document.createDocumentFragment();
             selectedList.forEach((course) => {
                 const card = createPlannerCourseCard(course, {
-                    actionLabel: '移除',
+                    actionLabel: t('planner-remove'),
                     onAction: () => plannerRemoveCourse(course.id),
                     actionDisabled: course.pinned,
-                    actionTitle: course.pinned ? '已上傳課程不可移除' : ''
+                    actionTitle: course.pinned ? t('planner-pinned-no-remove') : ''
                 });
                 fragment.appendChild(card);
             });
@@ -3136,7 +3122,7 @@ ${scoreLine}
             .sort((a, b) => comparePlannerCourses(b, a));
 
         if (!allCandidates.length) {
-            candidateContainer.appendChild(createPlannerEmptyState('沒有更多可加入課程。'));
+            candidateContainer.appendChild(createPlannerEmptyState(t('planner-no-candidate')));
             renderPlannerTimetable();
             return;
         }
@@ -3217,10 +3203,10 @@ ${scoreLine}
                 const conflict = hasPlannerConflictWithSelected(course, state.planner.selected);
                 const teachers = teacherMap.get(course.course) || [course];
                 const card = createPlannerCourseCard(course, {
-                    actionLabel: conflict ? '衝堂' : '加入',
+                    actionLabel: conflict ? t('conflict').replace('✗ ', '') : t('add-action'),
                     onAction: () => plannerAddCourseWithTeacherPicker(course, teachers, conflict),
                     actionDisabled: conflict,
-                    actionTitle: conflict ? '與目前課表節次衝突' : ''
+                    actionTitle: conflict ? t('conflict-planner') : ''
                 });
                 frag.appendChild(card);
             });
@@ -3405,7 +3391,7 @@ ${scoreLine}
 
     function showPlannerSlotPicker(slotKey, dayLabel, period) {
         if (!state.planner.hasPlan) {
-            showToast('請先產生建議課表，再從空白節次加入課程。', 'error');
+            showToast(t('generate-first'), 'error');
             return;
         }
 
@@ -3432,10 +3418,10 @@ ${scoreLine}
         const titleWrap = document.createElement('div');
         const title = document.createElement('h4');
         title.className = 'text-sm font-semibold';
-        title.textContent = `星期${dayLabel}第 ${period} 節`;
+        title.textContent = t('period-label', { day: dayLabel, period });
         const subtitle = document.createElement('p');
         subtitle.className = 'mt-1 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
-        subtitle.textContent = '優先顯示能放進此空白節次，且不與目前課表衝堂的課程。';
+        subtitle.textContent = t('slot-candidates');
         titleWrap.append(title, subtitle);
 
         const closeBtn = document.createElement('button');
@@ -3563,7 +3549,7 @@ ${scoreLine}
                     return !hasPlannerConflictWithSelected(variant, state.planner.selected);
                 });
             const card = createPlannerCourseCard(course, {
-                actionLabel: '加入',
+                actionLabel: t('add-action'),
                 onAction: () => {
                     overlay.remove();
                     plannerAddCourseWithTeacherPicker(course, variants.length ? variants : [course], false);
@@ -3617,7 +3603,7 @@ ${scoreLine}
         const actionButton = document.createElement('button');
         actionButton.type = 'button';
         actionButton.className = 'px-2.5 py-1 rounded-md text-xs font-medium bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed';
-        actionButton.textContent = options.actionLabel || '加入';
+        actionButton.textContent = options.actionLabel || t('add-action');
         actionButton.disabled = Boolean(options.actionDisabled);
         if (options.actionTitle) {
             actionButton.title = options.actionTitle;
@@ -3854,7 +3840,7 @@ ${scoreLine}
 
         const title = document.createElement('h4');
         title.className = 'text-sm font-semibold mb-3';
-        title.textContent = `選擇「${courseName}」的教師`;
+        title.textContent = t('select-teacher-title', { course: courseName });
         box.appendChild(title);
 
         const list = document.createElement('div');
@@ -3880,7 +3866,7 @@ ${scoreLine}
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'mt-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary hover:underline';
-        cancelBtn.textContent = '取消';
+        cancelBtn.textContent = t('cancel');
         cancelBtn.addEventListener('click', () => overlay.remove());
         box.appendChild(cancelBtn);
 
@@ -4163,17 +4149,17 @@ ${scoreLine}
     async function performAnalysis(course, output, button) {
         const context = elements.userContext.value.trim();
         if (!context) {
-            output.textContent = '請先在「背景補充說明」欄位描述你的需求，再啟動 AI 評估。';
+            output.textContent = t('ai-fill-bg');
             output.classList.remove('hidden');
             output.classList.add('text-notion-red');
             return;
         }
 
         output.classList.remove('hidden', 'text-notion-red');
-        output.textContent = 'AI 評估進行中...';
+        output.textContent = t('ai-evaluating');
         button.disabled = true;
         const originalBtnText = button.textContent;
-        button.textContent = '評估中...';
+        button.textContent = t('evaluating');
 
         try {
             const response = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/analyze', {
@@ -4199,11 +4185,11 @@ ${scoreLine}
                 output.textContent = payload.error;
                 output.classList.add('text-notion-red');
             } else {
-                output.textContent = 'AI 未傳回建議內容，請稍後再試。';
+                output.textContent = t('ai-no-result');
                 output.classList.add('text-notion-red');
             }
         } catch (error) {
-            output.textContent = error.message || 'AI 分析過程發生問題，請稍後再試。';
+            output.textContent = error.message || t('ai-error');
             output.classList.add('text-red-500');
         } finally {
             button.disabled = false;
@@ -4216,7 +4202,7 @@ ${scoreLine}
         summary.classList.remove('hidden');
 
         if (context.isPreview) {
-            summary.textContent = `精選熱門課程，挑出 ${count} 門課程供你快速參考。`;
+            summary.textContent = t('popular-results', { n: count });
             return;
         }
 
@@ -4242,11 +4228,11 @@ ${scoreLine}
 
         const suffix = parts.length ? `（${parts.join('；')}）` : '';
         if (count) {
-            summary.textContent = `共找到 ${count} 門課程${suffix}`;
+            summary.textContent = t('found-results', { n: count, suffix });
         } else if (context.hasActiveFilters) {
-            summary.textContent = `沒有找到符合條件的課程${suffix}，試著調整關鍵字或放寬篩選。`;
+            summary.textContent = t('no-results-summary', { suffix });
         } else {
-            summary.textContent = '目前尚未搜尋課程，輸入關鍵字即可開始。';
+            summary.textContent = t('not-searched');
         }
     }
 
@@ -4455,7 +4441,7 @@ ${scoreLine}
             const data = await res.json();
             if (data.url) window.location.href = data.url;
         } catch {
-            alert('無法取得登入網址，請稍後再試。');
+            alert(t('login-failed'));
         }
     }
 
@@ -4581,7 +4567,7 @@ ${scoreLine}
     });
 
     textarea.addEventListener('input', () => {
-        charCount.textContent = `${textarea.value.length} / 2000`;
+        charCount.textContent = t('feedback-char', { n: textarea.value.length });
     });
 
     document.querySelectorAll('.feedback-type-option input').forEach((radio) => {
@@ -4604,13 +4590,13 @@ ${scoreLine}
         const contact = document.getElementById('feedback-contact').value.trim();
 
         if (!content) {
-            errorBox.textContent = '請填寫回饋內容。';
+            errorBox.textContent = t('feedback-error-empty');
             errorBox.classList.remove('hidden');
             return;
         }
 
         submitBtn.disabled = true;
-        submitBtn.textContent = '送出中...';
+        submitBtn.textContent = t('feedback-submitting');
 
         try {
             const token = localStorage.getItem('nid_token');
@@ -4628,7 +4614,7 @@ ${scoreLine}
             form.classList.add('hidden');
             successPanel.classList.remove('hidden');
             form.reset();
-            charCount.textContent = '0 / 2000';
+            charCount.textContent = t('feedback-char', { n: 0 });
             document.querySelectorAll('.feedback-type-option span').forEach((span, i) => {
                 span.className = i === 0
                     ? 'px-3 py-1.5 text-sm rounded-md border border-notion-accent bg-notion-accent-light dark:bg-notion-accent/20 text-notion-accent font-medium transition-all duration-150 select-none'
@@ -4639,7 +4625,7 @@ ${scoreLine}
             errorBox.classList.remove('hidden');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = '送出回饋';
+            submitBtn.textContent = t('feedback-submit');
         }
     });
 }());
