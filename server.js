@@ -78,6 +78,7 @@ async function initDB() {
 initDB().catch(console.error);
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const MAX_PLANNER_HISTORY = 5;
 const __filename = fileURLToPath(import.meta.url);
