@@ -507,6 +507,10 @@
                 setTimeout(() => { plannerSaveBtn.textContent = t('save-btn'); plannerSaveBtn.disabled = false; }, 2000);
             });
         }
+        const plannerExportBtn = document.getElementById('planner-export-pdf');
+        if (plannerExportBtn) {
+            plannerExportBtn.addEventListener('click', exportPlannerAsFcuPdf);
+        }
         if (elements.plannerReset) {
             elements.plannerReset.addEventListener('click', resetPlannerState);
         }
@@ -3373,6 +3377,156 @@
             elements.floatingTimetable.dataset.manuallyClosed = '';
         } else {
             updateFloatingTimetableVisibility();
+        }
+    }
+
+    function getFcuSemesterLabel() {
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        if (month >= 8) {
+            return { acadYear: year - 1911, semester: 1 };
+        } else {
+            return { acadYear: year - 1912, semester: 2 };
+        }
+    }
+
+    function exportPlannerAsFcuPdf() {
+        const uploadedCourses = Array.isArray(state.planner.uploadedCourses) ? state.planner.uploadedCourses : [];
+        const selectedCourses = state.planner.hasPlan ? Array.from(state.planner.selected.values()) : [];
+
+        const courseByName = new Map();
+        [...uploadedCourses, ...selectedCourses].forEach((c) => {
+            const name = toPlannerString(c?.course ?? c?.name);
+            const times = getPlannerTimetableTimes(c);
+            if (!name) return;
+            const existing = courseByName.get(name);
+            if (!existing || times.length > existing.times.length) {
+                courseByName.set(name, { name, times, credits: c.credits ?? null, teacher: c.teacher || '', required: c.required ?? false });
+            }
+        });
+        const allCourses = Array.from(courseByName.values());
+
+        if (!allCourses.length) {
+            alert('目前沒有課程可以匯出。');
+            return;
+        }
+
+        const slotMap = new Map();
+        allCourses.forEach(({ name, times }) => {
+            times.forEach((slot) => {
+                const normalized = String(slot).trim().toUpperCase();
+                if (!slotMap.has(normalized)) slotMap.set(normalized, name);
+            });
+        });
+
+        const user = (() => { try { return JSON.parse(localStorage.getItem('nid_user')); } catch { return null; } })();
+        const studentName = user?.name || '';
+        const studentId = user?.nid || user?.id || '';
+        const deptName = user?.dept_name || user?.unit_name || '';
+        const { acadYear, semester } = getFcuSemesterLabel();
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+        const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+        const DAY_LABELS = ['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
+        const PERIODS = Array.from({ length: 14 }, (_, i) => i + 1);
+
+        const activeDaySet = new Set();
+        slotMap.forEach((_, slot) => {
+            const m = slot.match(/^(MON|TUE|WED|THU|FRI|SAT|SUN)/);
+            if (m) activeDaySet.add(m[1]);
+        });
+        const visibleDays = DAYS.filter((d, i) => i < 5 || activeDaySet.has(d));
+
+        const PERIOD_TIMES = ['08:10~09:00','09:10~10:00','10:10~11:00','11:10~12:00','12:10~13:00','13:10~14:00','14:10~15:00','15:10~16:00','16:10~17:00','17:10~18:00','18:30~19:20','19:25~20:15','20:25~21:15','21:20~22:10'];
+
+        let tableRows = '';
+        PERIODS.forEach((period) => {
+            const timeRange = PERIOD_TIMES[period - 1] || '';
+            let cells = `<td style="border:1px solid #000;text-align:center;font-size:11px;padding:2px;">${period}<br><span style="font-size:9px;color:#555;">${timeRange.replace('~','<br>')}</span></td>`;
+            visibleDays.forEach((day) => {
+                const slotKey = `${day}${period}`;
+                const courseName = slotMap.get(slotKey) || '';
+                if (courseName) {
+                    const course = courseByName.get(courseName);
+                    const teacher = course?.teacher ? `(${course.teacher})` : '';
+                    cells += `<td style="border:1px solid #000;text-align:center;font-size:10px;padding:2px;word-break:keep-all;overflow-wrap:anywhere;">${courseName}<br><span style="font-size:9px;">${teacher}</span></td>`;
+                } else {
+                    cells += `<td style="border:1px solid #000;"></td>`;
+                }
+            });
+            tableRows += `<tr>${cells}</tr>`;
+        });
+
+        const headerCells = visibleDays.map((d) => `<th style="border:1px solid #000;padding:4px;font-size:11px;background:#f0f0f0;">${DAY_LABELS[DAYS.indexOf(d)]}</th>`).join('');
+
+        const courseListRows = allCourses.map((c) => {
+            const creditsStr = c.credits != null ? c.credits : '－';
+            const requiredStr = c.required ? '必修' : '選修';
+            return `<tr>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;"></td>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;"></td>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;">${c.name}</td>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;"></td>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;text-align:center;">${requiredStr}</td>
+                <td style="border:1px solid #000;padding:2px 4px;font-size:10px;text-align:center;">${creditsStr}</td>
+            </tr>`;
+        }).join('');
+
+        const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>逢甲大學 ${acadYear} 學年度第 ${semester} 學期 課表</title>
+<style>
+  body { font-family: "Microsoft JhengHei", "PingFang TC", Arial, sans-serif; margin: 0; padding: 8px; font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  @media print { body { margin: 0; } button { display: none; } }
+</style>
+</head>
+<body>
+<div style="text-align:center;font-size:16px;font-weight:bold;margin-bottom:6px;">逢甲大學 ${acadYear} 學年度第 ${semester} 學期 課表</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:11px;">
+  <span>${deptName}/${studentName}（${studentId}）</span>
+  <span>${dateStr}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th style="border:1px solid #000;padding:4px;font-size:11px;background:#f0f0f0;width:60px;">節次</th>
+      ${headerCells}
+    </tr>
+  </thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<br>
+<div style="font-size:11px;margin-bottom:4px;">無上課時間清單</div>
+<table>
+  <thead>
+    <tr>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">選課代號</th>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">開課班級</th>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">科目名稱</th>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">開課別</th>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">必選修</th>
+      <th style="border:1px solid #000;padding:2px 4px;font-size:10px;background:#f0f0f0;">學分</th>
+    </tr>
+  </thead>
+  <tbody>${courseListRows}</tbody>
+</table>
+<br>
+<div style="text-align:center;">
+  <button onclick="window.print()" style="padding:8px 24px;font-size:13px;cursor:pointer;">列印 / 另存為 PDF</button>
+</div>
+</body>
+</html>`;
+
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, '_blank');
+        if (win) {
+            win.addEventListener('load', () => URL.revokeObjectURL(url));
         }
     }
 
