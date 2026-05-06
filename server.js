@@ -622,7 +622,7 @@ const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
 let mailTransporter = null;
-let mailVerified = false;
+let mailVerifyError = null;
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
   mailTransporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
@@ -634,11 +634,10 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
   mailTransporter.verify((err) => {
     if (err) {
       console.error("[email] Gmail 驗證失敗，回饋信件將無法寄出：", err.message);
+      mailVerifyError = err.message;
       mailTransporter = null;
-      mailVerified = false;
     } else {
       console.log("[email] Gmail 連線驗證成功，回饋信件將寄至：", FEEDBACK_EMAIL);
-      mailVerified = true;
     }
   });
 } else {
@@ -654,7 +653,7 @@ app.get("/api/feedback/email-test", async (req, res) => {
     return res.json({ ok: false, reason: "未設定 FEEDBACK_EMAIL" });
   }
   if (!mailTransporter) {
-    return res.json({ ok: false, reason: "transporter 建立失敗，Gmail 驗證未通過" });
+    return res.json({ ok: false, reason: `Gmail 驗證失敗：${mailVerifyError || "未知錯誤"}` });
   }
   try {
     await mailTransporter.sendMail({
