@@ -1473,9 +1473,7 @@
         removeButton.className = 'text-xs text-notion-red hover:underline self-start mt-1 font-medium';
         removeButton.textContent = t('remove');
         removeButton.addEventListener('click', () => {
-            state.favorites.delete(course.id);
-            saveFavorites();
-            updateFavoritesUI();
+            toggleFavorite(course);
             runSearch({ force: state.hasSearched });
         });
         card.appendChild(removeButton);
@@ -1513,8 +1511,11 @@
     function clearFavorites() {
         if (!state.favorites.size) return;
         if (!confirm(t('confirm-clear-favorites'))) return;
+        const ids = [...state.favorites.keys()];
         state.favorites.clear();
-        saveFavorites();
+        ids.forEach((id) => {
+            (window.authFetch || fetch)(`${window.API_BASE_URL || ''}/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(console.warn);
+        });
         updateFavoritesUI();
     }
 
