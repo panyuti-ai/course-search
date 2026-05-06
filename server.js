@@ -1,6 +1,3 @@
-import dns from "dns";
-dns.setDefaultResultOrder("ipv4first");
-
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -10,7 +7,7 @@ import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import pg from "pg";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 const { Pool } = pg;
 
 dotenv.config();
@@ -621,49 +618,25 @@ const feedbackRateLimiter = rateLimit({
 });
 
 const FEEDBACK_EMAIL = process.env.FEEDBACK_EMAIL;
-const GMAIL_USER = process.env.GMAIL_USER;
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
-let mailTransporter = null;
-let mailVerifyError = null;
-if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-  mailTransporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    family: 4,
-    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-  });
-  mailTransporter.verify((err) => {
-    if (err) {
-      console.error("[email] Gmail 驗證失敗，回饋信件將無法寄出：", err.message);
-      mailVerifyError = err.message;
-      mailTransporter = null;
-    } else {
-      console.log("[email] Gmail 連線驗證成功，回饋信件將寄至：", FEEDBACK_EMAIL);
-    }
-  });
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+if (resend) {
+  console.log("[email] Resend 已初始化，回饋信件將寄至：", FEEDBACK_EMAIL);
 } else {
-  console.warn("[email] 未設定 GMAIL_USER 或 GMAIL_APP_PASSWORD，回饋信件功能已停用。");
+  console.warn("[email] 未設定 RESEND_API_KEY，回饋信件功能已停用。");
 }
 
 // 測試寄信端點（僅供開發者使用）
 app.get("/api/feedback/email-test", async (req, res) => {
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    return res.json({ ok: false, reason: "未設定 GMAIL_USER 或 GMAIL_APP_PASSWORD" });
-  }
-  if (!FEEDBACK_EMAIL) {
-    return res.json({ ok: false, reason: "未設定 FEEDBACK_EMAIL" });
-  }
-  if (!mailTransporter) {
-    return res.json({ ok: false, reason: `Gmail 驗證失敗：${mailVerifyError || "未知錯誤"}` });
-  }
+  if (!resend) return res.json({ ok: false, reason: "未設定 RESEND_API_KEY" });
+  if (!FEEDBACK_EMAIL) return res.json({ ok: false, reason: "未設定 FEEDBACK_EMAIL" });
   try {
-    await mailTransporter.sendMail({
-      from: GMAIL_USER,
+    await resend.emails.send({
+      from: "onboarding@resend.dev",
       to: FEEDBACK_EMAIL,
       subject: "[選課助手] 測試信件",
-      text: "這是一封測試信件，確認 Gmail 寄信功能正常。",
+      text: "這是一封測試信件，確認 Resend 寄信功能正常。",
     });
     return res.json({ ok: true, message: `測試信件已寄至 ${FEEDBACK_EMAIL}` });
   } catch (err) {
@@ -703,9 +676,9 @@ app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
       [type, content.trim(), sanitizedContact || null, nid]
     );
 
-    if (mailTransporter && FEEDBACK_EMAIL) {
-      const mailOptions = {
-        from: GMAIL_USER,
+    if (resend && FEEDBACK_EMAIL) {
+      resend.emails.send({
+        from: "onboarding@resend.dev",
         to: FEEDBACK_EMAIL,
         subject: `[選課助手回饋] ${type}`,
         text: [
@@ -716,10 +689,7 @@ app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
           "內容：",
           content.trim(),
         ].join("\n"),
-      };
-      mailTransporter.sendMail(mailOptions).catch((mailErr) =>
-        console.error("[feedback] 寄信失敗：", mailErr.message)
-      );
+      }).catch((mailErr) => console.error("[feedback] 寄信失敗：", mailErr.message));
     }
 
     return res.json({ success: true });
