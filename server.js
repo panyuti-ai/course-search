@@ -622,6 +622,7 @@ const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
 let mailTransporter = null;
+let mailVerified = false;
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
   mailTransporter = nodemailer.createTransport({
     service: "gmail",
@@ -631,13 +632,39 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
     if (err) {
       console.error("[email] Gmail 驗證失敗，回饋信件將無法寄出：", err.message);
       mailTransporter = null;
+      mailVerified = false;
     } else {
       console.log("[email] Gmail 連線驗證成功，回饋信件將寄至：", FEEDBACK_EMAIL);
+      mailVerified = true;
     }
   });
 } else {
   console.warn("[email] 未設定 GMAIL_USER 或 GMAIL_APP_PASSWORD，回饋信件功能已停用。");
 }
+
+// 測試寄信端點（僅供開發者使用）
+app.get("/api/feedback/email-test", async (req, res) => {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    return res.json({ ok: false, reason: "未設定 GMAIL_USER 或 GMAIL_APP_PASSWORD" });
+  }
+  if (!FEEDBACK_EMAIL) {
+    return res.json({ ok: false, reason: "未設定 FEEDBACK_EMAIL" });
+  }
+  if (!mailTransporter) {
+    return res.json({ ok: false, reason: "transporter 建立失敗，Gmail 驗證未通過" });
+  }
+  try {
+    await mailTransporter.sendMail({
+      from: GMAIL_USER,
+      to: FEEDBACK_EMAIL,
+      subject: "[選課助手] 測試信件",
+      text: "這是一封測試信件，確認 Gmail 寄信功能正常。",
+    });
+    return res.json({ ok: true, message: `測試信件已寄至 ${FEEDBACK_EMAIL}` });
+  } catch (err) {
+    return res.json({ ok: false, reason: err.message });
+  }
+});
 
 app.post("/api/feedback", feedbackRateLimiter, async (req, res) => {
   const { type, content, contact } = req.body || {};
