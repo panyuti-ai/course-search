@@ -629,8 +629,8 @@ let mailVerifyError = null;
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
   mailTransporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
     family: 4,
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   });
