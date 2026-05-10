@@ -125,6 +125,8 @@
 
     const STORAGE_KEY_FAVORITES = 'course-search:favorites';
     const STORAGE_KEY_THEME = 'course-search:theme';
+    const STORAGE_KEY_RECENT_SEARCHES = 'course-search:recent-searches';
+    const RECENT_SEARCH_LIMIT = 8;
 
     const PAGE_SIZE = 20;
     const PDFJS_WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -139,6 +141,7 @@
         suggestionIndex: -1,
         lastResults: [],
         displayedCount: 0,
+        recentSearches: [],
         planner: {
             pool: [],
             selected: new Map(),
@@ -157,6 +160,7 @@
         userContext: document.getElementById('user-context'),
         sortSelect: document.getElementById('sort-select'),
         resultsSummary: document.getElementById('results-summary'),
+        recentSearches: document.getElementById('recent-searches'),
         searchResults: document.getElementById('search-results'),
         suggestions: document.getElementById('suggestions'),
         minDifficulty: document.getElementById('min-difficulty'),
@@ -220,6 +224,8 @@
             applyStoredTheme();
             await loadCourses();
             loadFavorites();
+            loadRecentSearches();
+            renderRecentSearches();
             populateFilters();
             attachEvents();
             initializePlannerSection();
@@ -431,6 +437,222 @@
         // 收藏/取消收藏由 toggleFavorite 直接呼叫 API，這裡保留空實作
     }
 
+        function loadRecentSearches() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_RECENT_SEARCHES);
+            if (!raw) {
+                state.recentSearches = [];
+                return;
+            }
+
+            const parsed = JSON.parse(raw);
+            state.recentSearches = Array.isArray(parsed)
+                ? parsed
+                    .filter((item) => item && typeof item === 'object')
+                    .map((item) => ({
+                        query: typeof item.query === 'string' ? item.query.trim() : '',
+                        tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [],
+                        sources: Array.isArray(item.sources) ? item.sources.filter(Boolean) : [],
+                        minDifficulty: item.minDifficulty ?? null,
+                        maxDifficulty: item.maxDifficulty ?? null,
+                        minScore: item.minScore ?? null,
+                        sort: typeof item.sort === 'string' && item.sort ? item.sort : 'course',
+                        updatedAt: item.updatedAt || Date.now(),
+                    }))
+                    .slice(0, RECENT_SEARCH_LIMIT)
+                : [];
+        } catch (error) {
+            console.warn('Failed to load recent searches:', error);
+            state.recentSearches = [];
+        }
+    }
+
+    function saveRecentSearches() {
+        try {
+            localStorage.setItem(STORAGE_KEY_RECENT_SEARCHES, JSON.stringify(state.recentSearches));
+        } catch (error) {
+            console.warn('Failed to save recent searches:', error);
+        }
+    }
+
+    function buildRecentSearchLabel(item) {
+        const parts = [];
+
+        if (item.query) {
+            parts.push(item.query);
+        } else {
+            parts.push('全部課程');
+        }
+
+        if (item.tags && item.tags.length) {
+            parts.push(`標籤：${item.tags.join('、')}`);
+        }
+
+        if (item.sources && item.sources.length) {
+            parts.push(`來源：${item.sources.join('、')}`);
+        }
+
+        if (item.minDifficulty !== null || item.maxDifficulty !== null) {
+            parts.push(`難度：${item.minDifficulty ?? '不限'} ~ ${item.maxDifficulty ?? '不限'}`);
+        }
+
+        if (item.minScore !== null) {
+            parts.push(`分數：${item.minScore}+`);
+        }
+
+        return parts.join(' · ');
+    }
+
+    function renderRecentSearches() {
+        if (!elements.recentSearches) return;
+
+        elements.recentSearches.innerHTML = '';
+
+        if (!state.recentSearches.length) {
+            const empty = document.createElement('span');
+            empty.className = 'text-sm text-notion-text-secondary dark:text-dark-text-secondary';
+            empty.textContent = '尚無搜尋紀錄';
+            elements.recentSearches.appendChild(empty);
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        state.recentSearches.forEach((item, index) => {
+            const chip = document.createElement('div');
+            chip.className = 'inline-flex items-stretch overflow-hidden rounded-full border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card';
+
+            const applyButton = document.createElement('button');
+            applyButton.type = 'button';
+            applyButton.className = 'px-3 py-1.5 text-sm text-notion-text dark:text-dark-text hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors duration-150';
+            applyButton.dataset.action = 'apply-recent-search';
+            applyButton.dataset.index = String(index);
+            applyButton.textContent = item.query || '全部課程';
+            applyButton.title = buildRecentSearchLabel(item);
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'px-2 py-1.5 text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:text-notion-red hover:bg-notion-bg-hover dark:hover:bg-dark-border border-l border-notion-border dark:border-dark-border transition-colors duration-150';
+            removeButton.dataset.action = 'remove-recent-search';
+            removeButton.dataset.index = String(index);
+            removeButton.setAttribute('aria-label', '刪除這筆搜尋紀錄');
+            removeButton.textContent = '×';
+
+            chip.appendChild(applyButton);
+            chip.appendChild(removeButton);
+            fragment.appendChild(chip);
+        });
+
+        elements.recentSearches.appendChild(fragment);
+    }
+
+    function addRecentSearch(searchData) {
+        const query = typeof searchData.query === 'string' ? searchData.query.trim() : '';
+        const tags = Array.isArray(searchData.tags) ? searchData.tags.filter(Boolean) : [];
+        const sources = Array.isArray(searchData.sources) ? searchData.sources.filter(Boolean) : [];
+        const minDifficulty = searchData.minDifficulty ?? null;
+        const maxDifficulty = searchData.maxDifficulty ?? null;
+        const minScore = searchData.minScore ?? null;
+        const sort = typeof searchData.sort === 'string' && searchData.sort ? searchData.sort : 'course';
+
+        if (!query && !tags.length && !sources.length && minDifficulty === null && maxDifficulty === null && minScore === null && sort === 'course') {
+            return;
+        }
+
+        const signature = JSON.stringify({
+            query,
+            tags: [...tags].sort(),
+            sources: [...sources].sort(),
+            minDifficulty,
+            maxDifficulty,
+            minScore,
+            sort,
+        });
+
+        state.recentSearches = state.recentSearches.filter((item) => {
+            const itemSignature = JSON.stringify({
+                query: item.query || '',
+                tags: [...(item.tags || [])].sort(),
+                sources: [...(item.sources || [])].sort(),
+                minDifficulty: item.minDifficulty ?? null,
+                maxDifficulty: item.maxDifficulty ?? null,
+                minScore: item.minScore ?? null,
+                sort: item.sort || 'course',
+            });
+            return itemSignature !== signature;
+        });
+
+        state.recentSearches.unshift({
+            query,
+            tags,
+            sources,
+            minDifficulty,
+            maxDifficulty,
+            minScore,
+            sort,
+            updatedAt: Date.now(),
+        });
+
+        if (state.recentSearches.length > RECENT_SEARCH_LIMIT) {
+            state.recentSearches.length = RECENT_SEARCH_LIMIT;
+        }
+
+        saveRecentSearches();
+        renderRecentSearches();
+    }
+
+    function removeRecentSearch(index) {
+        if (index < 0 || index >= state.recentSearches.length) {
+            return;
+        }
+
+        state.recentSearches.splice(index, 1);
+        saveRecentSearches();
+        renderRecentSearches();
+    }
+
+    function syncFilterChipUI() {
+        if (elements.tagFilters) {
+            elements.tagFilters.querySelectorAll('label').forEach((label) => {
+                const input = label.querySelector('input[type="checkbox"]');
+                if (!input) return;
+                const checked = state.activeTagFilters.has(input.value);
+                input.checked = checked;
+                label.classList.toggle('filter-chip-active', checked);
+            });
+        }
+
+        if (elements.sourceFilters) {
+            elements.sourceFilters.querySelectorAll('label').forEach((label) => {
+                const input = label.querySelector('input[type="checkbox"]');
+                if (!input) return;
+                const checked = state.activeSourceFilters.has(input.value);
+                input.checked = checked;
+                label.classList.toggle('filter-chip-active', checked);
+            });
+        }
+    }
+
+    function applyRecentSearch(item) {
+        if (!item) return;
+
+        elements.courseInput.value = item.query || '';
+        elements.sortSelect.value = item.sort || 'course';
+
+        elements.minDifficulty.value = item.minDifficulty ?? '';
+        elements.maxDifficulty.value = item.maxDifficulty ?? '';
+        elements.minScore.value = item.minScore ?? '';
+
+        state.activeTagFilters.clear();
+        state.activeSourceFilters.clear();
+
+        (item.tags || []).forEach((tag) => state.activeTagFilters.add(tag));
+        (item.sources || []).forEach((source) => state.activeSourceFilters.add(source));
+
+        syncFilterChipUI();
+        runSearch({ force: true });
+    }
+
     function attachEvents() {
         elements.searchForm.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -481,6 +703,25 @@
         elements.closeFavorites.addEventListener('click', closeFavoritesPanel);
         elements.favoritesBackdrop.addEventListener('click', closeFavoritesPanel);
         elements.clearFavorites.addEventListener('click', clearFavorites);
+        
+        if (elements.recentSearches) {
+            elements.recentSearches.addEventListener('click', (event) => {
+                const removeButton = event.target.closest('[data-action="remove-recent-search"]');
+                
+                if (removeButton) {
+                    const index = Number(removeButton.dataset.index);
+                    removeRecentSearch(index);
+                    return;
+                }
+
+                const applyButton = event.target.closest('[data-action="apply-recent-search"]');
+                
+                if (applyButton) {
+                    const index = Number(applyButton.dataset.index);
+                    applyRecentSearch(state.recentSearches[index]);
+                }
+            });
+        }
 
         if (elements.themeToggle) {
             elements.themeToggle.addEventListener('click', toggleTheme);
@@ -868,6 +1109,15 @@
                 minDiff !== null ||
                 maxDiff !== null ||
                 minScore !== null
+        });
+        addRecentSearch({
+            query: queryRaw,
+            tags: Array.from(state.activeTagFilters),
+            sources: Array.from(state.activeSourceFilters),
+            minDifficulty: minDiff,
+            maxDifficulty: maxDiff,
+            minScore,
+            sort: elements.sortSelect.value,
         });
         syncStateToURL(queryRaw, minDiff, maxDiff, minScore);
     }
