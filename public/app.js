@@ -434,7 +434,7 @@
     function attachEvents() {
         elements.searchForm.addEventListener('submit', (event) => {
             event.preventDefault();
-            runSearch({ force: true });
+            runSearch({ force: true, scrollToResults: true });
             hideSuggestions();
             elements.courseInput.blur();
         });
@@ -758,7 +758,7 @@
         elements.resultsSummary.classList.add('hidden');
     }
 
-    function runSearch({ force = false } = {}) {
+    function runSearch({ force = false, scrollToResults = false } = {}) {
         const queryRaw = elements.courseInput.value.trim();
         const query = queryRaw.toLowerCase();
         const minDiff = parseSelectValue(elements.minDifficulty.value);
@@ -869,6 +869,9 @@
                 maxDiff !== null ||
                 minScore !== null
         });
+        if (scrollToResults) {
+            elements.resultsSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         syncStateToURL(queryRaw, minDiff, maxDiff, minScore);
     }
     function sortCourses(list) {
