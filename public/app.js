@@ -870,7 +870,9 @@
                 minScore !== null
         });
         if (scrollToResults) {
-            elements.resultsSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            requestAnimationFrame(() => {
+                elements.resultsSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
         }
         syncStateToURL(queryRaw, minDiff, maxDiff, minScore);
     }
