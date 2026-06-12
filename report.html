@@ -338,7 +338,7 @@
   <p>使用者登入後由後端核發 JSON Web Token（JWT），Token 存放於瀏覽器 localStorage。每次呼叫需要認證的 API 時，前端自動在 Authorization Header 帶入 Bearer Token，後端驗證 Token 有效性後才處理請求，防止未授權存取。</p>
 
   <div class="subsection-title">逢甲 NID OAuth</div>
-  <p>系統已預留逢甲大學 NID OAuth 2.0 登入流程，包含 /api/auth/login 與 /api/auth/callback 端點。待學校資訊處正式開放相關 API 後，即可讓學生以逢甲學號帳號登入，享有個人化功能。NID API KEY 每年 7/31 到期，需定期重新申請。</p>
+  <p>系統已完整整合逢甲大學 NID OAuth 2.0 登入流程，包含 /api/auth/login 與 /api/auth/callback 端點，學生可直接使用逢甲學號帳號登入，享有個人化收藏與 AI 分析歷史等功能。NID API KEY 每年 7/31 到期，需定期重新向逢甲大學資訊處申請更新。</p>
 
   <div class="subsection-title">Resend Email 服務</div>
   <p>意見回饋功能透過 Resend API 傳送 Email 通知至指定信箱。Resend 提供高送達率與詳細的發送紀錄，比傳統 SMTP 設定更為簡便。收件信箱由環境變數 FEEDBACK_EMAIL 設定，無需修改程式碼即可更換。</p>
