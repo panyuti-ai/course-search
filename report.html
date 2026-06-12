@@ -660,5 +660,87 @@ app.post("/api/analyze", limiter, async (req, res) => {
   <div class="page-num">11</div>
 </div>
 
+<!-- ═══════════════ CHAPTER 5 ═══════════════ -->
+<div class="page">
+  <div class="chapter-title">第五章　下學期預期進度</div>
+
+  <p>
+    目前「逢甲選課助手」的整體系統架構與核心功能已大致完善，涵蓋課程搜尋、AI 分析、排課規劃、Dcard 評分整合與意見回饋等模組均已完成開發與測試。
+  </p>
+  <p>
+    然而，若要讓系統真正與逢甲大學校務系統整合，須仰賴學校資訊處正式建立並開放 <strong>NID OAuth API</strong> 及相關校務資料存取介面。目前該 API 尚在申請與規劃階段，預計下學期配合學校行政流程逐步推進。下學期工作將聚焦於以下三個階段：
+  </p>
+  <ul>
+    <li><strong>七、八月</strong>：配合系辦正式申請 NID OAuth API，完成 API 串接與驗證流程測試。</li>
+    <li><strong>九、十月</strong>：建立正式 PostgreSQL 資料庫環境，完成使用者資料、收藏與分析記錄的資料遷移與上線。</li>
+    <li><strong>十一、十二月</strong>：進行系統整合測試、使用者測試與效能優化，完成專題期末成果發表準備。</li>
+  </ul>
+
+  <br>
+  <p><strong>專題進度甘特圖</strong></p>
+
+  <table style="font-size:10.5pt; margin-top:4mm;">
+    <thead>
+      <tr>
+        <th style="width:22%; text-align:left; padding-left:4mm;">工作項目</th>
+        <th style="width:13%;">七月</th>
+        <th style="width:13%;">八月</th>
+        <th style="width:13%;">九月</th>
+        <th style="width:13%;">十月</th>
+        <th style="width:13%;">十一月</th>
+        <th style="width:13%;">十二月</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">申請 NID OAuth API</td>
+        <td style="background:#4a90d9; color:white;">▓</td>
+        <td style="background:#4a90d9; color:white;">▓</td>
+        <td></td><td></td><td></td><td></td>
+      </tr>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">API 串接與驗證測試</td>
+        <td></td>
+        <td style="background:#4a90d9; color:white;">▓</td>
+        <td style="background:#4a90d9; color:white;">▓</td>
+        <td></td><td></td><td></td>
+      </tr>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">建立正式資料庫</td>
+        <td></td><td></td>
+        <td style="background:#27ae60; color:white;">▓</td>
+        <td style="background:#27ae60; color:white;">▓</td>
+        <td></td><td></td>
+      </tr>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">資料遷移與上線</td>
+        <td></td><td></td><td></td>
+        <td style="background:#27ae60; color:white;">▓</td>
+        <td style="background:#27ae60; color:white;">▓</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">系統整合測試</td>
+        <td></td><td></td><td></td><td></td>
+        <td style="background:#e67e22; color:white;">▓</td>
+        <td style="background:#e67e22; color:white;">▓</td>
+      </tr>
+      <tr>
+        <td style="text-align:left; padding-left:4mm;">專題成果發表準備</td>
+        <td></td><td></td><td></td><td></td><td></td>
+        <td style="background:#e67e22; color:white;">▓</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:5mm; font-size:10pt; display:flex; gap:10mm;">
+    <span>■ <span style="color:#4a90d9;">■</span> API 建構階段</span>
+    <span>■ <span style="color:#27ae60;">■</span> 資料庫建立階段</span>
+    <span>■ <span style="color:#e67e22;">■</span> 專題完成階段</span>
+  </div>
+
+  <div class="page-num">13</div>
+</div>
+
 </body>
 </html>
