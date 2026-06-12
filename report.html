@@ -6,7 +6,6 @@
 <title>專題期末報告 — 逢甲選課助手</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     font-family: "標楷體", "DFKai-SB", "BiauKai", "Noto Serif CJK TC", serif;
     font-size: 12pt;
@@ -14,8 +13,6 @@
     color: #000;
     background: #fff;
   }
-
-  /* ── Page layout ── */
   .page {
     width: 210mm;
     min-height: 297mm;
@@ -26,186 +23,62 @@
     position: relative;
   }
   .page:last-child { page-break-after: auto; }
-
   @media print {
     body { margin: 0; }
-    .page {
-      margin: 0;
-      box-shadow: none;
-      page-break-after: always;
-    }
+    .page { margin: 0; box-shadow: none; page-break-after: always; }
   }
-
   @media screen {
     body { background: #e0e0e0; padding: 20px 0; }
     .page { box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
   }
-
-  /* ── Cover page ── */
-  .cover {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding-top: 30mm;
-    text-align: center;
-  }
-  .cover h1 { font-size: 28pt; font-weight: bold; margin-bottom: 6mm; letter-spacing: 4px; }
-  .cover h2 { font-size: 22pt; font-weight: bold; margin-bottom: 6mm; letter-spacing: 4px; }
-  .cover h3 { font-size: 20pt; font-weight: bold; letter-spacing: 4px; }
-  .cover-spacer { height: 25mm; }
-  .cover-info {
-    margin-top: 20mm;
-    text-align: left;
-    font-size: 14pt;
-    line-height: 2.2;
-  }
-  .cover-info .label { font-weight: bold; }
-  .cover-members {
-    margin-top: 12mm;
-    text-align: left;
-    font-size: 14pt;
-    line-height: 2.6;
-  }
-  .cover-members .member-label { font-weight: bold; vertical-align: top; }
-  .cover-sign {
-    position: absolute;
-    bottom: 25mm;
-    left: 30mm;
-    font-size: 12pt;
-  }
-
-  /* ── TOC ── */
-  .toc-title {
-    font-size: 16pt;
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 10mm;
-    letter-spacing: 4px;
-  }
-  .toc-entry {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 3mm;
-    font-size: 12pt;
-  }
-  .toc-entry .toc-label { flex: 1; }
-  .toc-dots {
-    flex: 1;
-    border-bottom: 1px dotted #000;
-    margin: 0 4px 3px;
-    min-width: 30px;
-  }
-  .toc-entry .toc-page { white-space: nowrap; }
-  .toc-sub { padding-left: 8mm; }
-
-  /* ── Chapter headings ── */
-  .chapter-title {
-    font-size: 16pt;
-    font-weight: bold;
-    margin-bottom: 6mm;
-    letter-spacing: 1px;
-  }
-  .section-title {
-    font-size: 13pt;
-    font-weight: bold;
-    margin: 6mm 0 3mm;
-  }
-  .subsection-title {
-    font-size: 12pt;
-    font-weight: bold;
-    margin: 4mm 0 2mm;
-  }
-
-  p { margin-bottom: 3mm; text-indent: 2em; }
-  ul, ol { margin: 2mm 0 4mm 2em; }
-  li { margin-bottom: 1mm; line-height: 1.8; }
-
-  /* ── Tables ── */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 4mm 0;
-    font-size: 11pt;
-  }
-  th, td {
-    border: 1px solid #555;
-    padding: 2mm 3mm;
-    text-align: center;
-  }
-  th { background: #ddd; font-weight: bold; }
-
-  /* ── Code ── */
-  pre {
-    background: #f5f5f5;
-    border: 1px solid #ccc;
-    padding: 4mm;
-    margin: 3mm 0 5mm;
-    font-family: "Courier New", Courier, monospace;
-    font-size: 9.5pt;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-all;
-    page-break-inside: avoid;
-  }
-
-  /* ── Architecture diagram ── */
-  .arch-box {
-    border: 2px solid #333;
-    padding: 4mm 6mm;
-    margin: 3mm 0;
-    text-align: center;
-    font-size: 11pt;
-    background: #f9f9f9;
-    border-radius: 4px;
-  }
-  .arch-arrow {
-    text-align: center;
-    font-size: 14pt;
-    margin: 1mm 0;
-  }
-  .arch-row {
-    display: flex;
-    gap: 6mm;
-    justify-content: center;
-    margin: 3mm 0;
-  }
-  .arch-row .arch-box { flex: 1; }
-
-  .page-num {
-    position: absolute;
-    bottom: 10mm;
-    left: 0; right: 0;
-    text-align: center;
-    font-size: 10pt;
-  }
-
-  .fig-caption {
-    text-align: center;
-    font-size: 10pt;
-    margin: 2mm 0 5mm;
-    color: #333;
-  }
+  .cover { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:30mm; text-align:center; }
+  .cover h1 { font-size:28pt; font-weight:bold; margin-bottom:6mm; letter-spacing:4px; }
+  .cover h2 { font-size:22pt; font-weight:bold; margin-bottom:6mm; letter-spacing:4px; }
+  .cover h3 { font-size:20pt; font-weight:bold; letter-spacing:4px; }
+  .cover-spacer { height:25mm; }
+  .cover-info { margin-top:20mm; text-align:left; font-size:14pt; line-height:2.2; }
+  .cover-info .label { font-weight:bold; }
+  .cover-sign { position:absolute; bottom:25mm; left:30mm; font-size:12pt; }
+  .toc-title { font-size:16pt; font-weight:bold; text-align:center; margin-bottom:10mm; letter-spacing:4px; }
+  .toc-entry { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:3mm; font-size:12pt; }
+  .toc-entry .toc-label { flex:1; }
+  .toc-dots { flex:1; border-bottom:1px dotted #000; margin:0 4px 3px; min-width:30px; }
+  .toc-entry .toc-page { white-space:nowrap; }
+  .toc-sub { padding-left:8mm; }
+  .chapter-title { font-size:16pt; font-weight:bold; margin-bottom:6mm; letter-spacing:1px; }
+  .section-title { font-size:13pt; font-weight:bold; margin:6mm 0 3mm; }
+  .subsection-title { font-size:12pt; font-weight:bold; margin:4mm 0 2mm; }
+  p { margin-bottom:3mm; text-indent:2em; }
+  ul, ol { margin:2mm 0 4mm 2em; }
+  li { margin-bottom:1mm; line-height:1.8; }
+  table { width:100%; border-collapse:collapse; margin:4mm 0; font-size:11pt; }
+  th, td { border:1px solid #555; padding:2mm 3mm; text-align:center; }
+  th { background:#ddd; font-weight:bold; }
+  pre { background:#f5f5f5; border:1px solid #ccc; padding:4mm; margin:3mm 0 5mm; font-family:"Courier New",Courier,monospace; font-size:9.5pt; line-height:1.5; white-space:pre-wrap; word-break:break-all; page-break-inside:avoid; }
+  .arch-box { border:2px solid #333; padding:4mm 6mm; margin:3mm 0; text-align:center; font-size:11pt; background:#f9f9f9; border-radius:4px; }
+  .arch-arrow { text-align:center; font-size:14pt; margin:1mm 0; }
+  .arch-row { display:flex; gap:6mm; justify-content:center; margin:3mm 0; }
+  .arch-row .arch-box { flex:1; }
+  .page-num { position:absolute; bottom:10mm; left:0; right:0; text-align:center; font-size:10pt; }
+  .fig-caption { text-align:center; font-size:10pt; margin:2mm 0 5mm; color:#333; }
+  .feature-box { border:1px solid #999; border-radius:4px; padding:3mm 5mm; margin:3mm 0; background:#fafafa; }
+  .feature-box .feat-title { font-weight:bold; font-size:11.5pt; }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════ COVER PAGE ═══════════════ -->
+<!-- PAGE 1: COVER -->
 <div class="page cover">
   <h1>逢甲大學</h1>
   <h2>資訊工程學系</h2>
   <h3>專題期末報告</h3>
-
   <div class="cover-spacer"></div>
-
   <div class="cover-info">
     <span class="label">專題名稱：</span>逢甲選課助手（Course Search）<br>
     <span class="label">指導老師：</span>林哲維 老師
   </div>
-
-  <div class="cover-members">
-    <table style="border:none; margin-top:8mm; font-size:13pt; line-height:2.4; width:auto;">
+  <div style="margin-top:12mm;">
+    <table style="border:none; font-size:13pt; line-height:2.4; width:auto;">
       <tr>
         <td style="border:none; font-weight:bold; vertical-align:top; padding-right:6mm;">組員：</td>
         <td style="border:none;">
@@ -215,156 +88,124 @@
       </tr>
     </table>
   </div>
-
   <div class="cover-sign">指導老師簽名：＿＿＿＿＿＿＿＿＿＿＿＿＿＿</div>
   <div class="page-num">1</div>
 </div>
 
-<!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
+<!-- PAGE 2: TOC -->
 <div class="page">
   <div class="toc-title">目錄</div>
-
-  <div class="toc-entry">
-    <span class="toc-label">目錄</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">2</span>
-  </div>
-  <div class="toc-entry">
-    <span class="toc-label">第一章　前言</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">3</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">1.1　研究動機</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">3</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">1.2　研究方向</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">3</span>
-  </div>
-  <div class="toc-entry">
-    <span class="toc-label">第二章　市面分析</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">4</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">2.1　AI 輔助教育工具的趨勢</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">4</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">2.2　與市面上類似工具的比較分析</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">4</span>
-  </div>
-  <div class="toc-entry">
-    <span class="toc-label">第三章　使用技術</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">6</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">3.1　前後端技術</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">6</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">3.2　AI API 整合</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">6</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">3.3　資料庫與部署</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">7</span>
-  </div>
-  <div class="toc-entry">
-    <span class="toc-label">第四章　系統開發</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">8</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">4.1　UI 設計</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">8</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">4.2　系統架構</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">9</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">4.3　資料庫設計</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">10</span>
-  </div>
-  <div class="toc-entry toc-sub">
-    <span class="toc-label">4.4　使用程式碼</span>
-    <span class="toc-dots"></span>
-    <span class="toc-page">11</span>
-  </div>
-
+  <div class="toc-entry"><span class="toc-label">目錄</span><span class="toc-dots"></span><span class="toc-page">2</span></div>
+  <div class="toc-entry"><span class="toc-label">第一章　前言</span><span class="toc-dots"></span><span class="toc-page">3</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">1.1　研究動機</span><span class="toc-dots"></span><span class="toc-page">3</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">1.2　研究方向</span><span class="toc-dots"></span><span class="toc-page">4</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">1.3　系統特色與創新</span><span class="toc-dots"></span><span class="toc-page">5</span></div>
+  <div class="toc-entry"><span class="toc-label">第二章　市面分析</span><span class="toc-dots"></span><span class="toc-page">6</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">2.1　AI 輔助教育工具的趨勢</span><span class="toc-dots"></span><span class="toc-page">6</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">2.2　與市面上類似工具的比較分析</span><span class="toc-dots"></span><span class="toc-page">7</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">2.3　本系統的定位與差異化</span><span class="toc-dots"></span><span class="toc-page">8</span></div>
+  <div class="toc-entry"><span class="toc-label">第三章　使用技術</span><span class="toc-dots"></span><span class="toc-page">9</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">3.1　前端技術</span><span class="toc-dots"></span><span class="toc-page">9</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">3.2　後端技術</span><span class="toc-dots"></span><span class="toc-page">10</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">3.3　AI API 整合</span><span class="toc-dots"></span><span class="toc-page">11</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">3.4　資料庫與安全機制</span><span class="toc-dots"></span><span class="toc-page">12</span></div>
+  <div class="toc-entry"><span class="toc-label">第四章　系統開發</span><span class="toc-dots"></span><span class="toc-page">13</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.1　UI 設計概念</span><span class="toc-dots"></span><span class="toc-page">13</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.2　各功能頁面說明</span><span class="toc-dots"></span><span class="toc-page">14</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.3　系統架構</span><span class="toc-dots"></span><span class="toc-page">15</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.4　API 端點設計</span><span class="toc-dots"></span><span class="toc-page">16</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.5　資料庫設計</span><span class="toc-dots"></span><span class="toc-page">17</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.6　AI 課程分析功能</span><span class="toc-dots"></span><span class="toc-page">18</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.7　AI 排課規劃器</span><span class="toc-dots"></span><span class="toc-page">19</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.8　Dcard 評分爬蟲</span><span class="toc-dots"></span><span class="toc-page">20</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.9　核心程式碼</span><span class="toc-dots"></span><span class="toc-page">21</span></div>
+  <div class="toc-entry toc-sub"><span class="toc-label">4.10　系統測試</span><span class="toc-dots"></span><span class="toc-page">23</span></div>
+  <div class="toc-entry"><span class="toc-label">第五章　下學期預期進度</span><span class="toc-dots"></span><span class="toc-page">24</span></div>
   <div class="page-num">2</div>
 </div>
 
-<!-- ═══════════════ CHAPTER 1 ═══════════════ -->
+<!-- PAGE 3: CH1 研究動機 -->
 <div class="page">
   <div class="chapter-title">第一章　前言</div>
-
   <div class="section-title">1.1　研究動機</div>
-  <p>
-    現代大學生每學期選課時，往往面對數百門課程卻難以判斷哪些最適合自己。傳統的課程查詢系統僅能提供基本的課程資訊，如開課時間、學分數與授課教師，缺乏對課程難度、授課品質與個人先備知識的客觀評估依據。
-  </p>
-  <p>
-    此外，學生通常需要在多個平台之間切換，包含校務系統、Dcard 討論版與學長姐的非正式口耳相傳，才能蒐集到足夠的選課參考資訊。這種資訊分散的現象浪費了大量時間，也可能導致選課決策不夠理想，影響整體學習效益。
-  </p>
-  <p>
-    因此，我們希望建立一個整合式的 AI 輔助選課平台，讓學生能夠在同一個介面內完成搜尋、評估與排課，大幅提升選課效率。
-  </p>
-
-  <div class="section-title">1.2　研究方向</div>
-  <p>
-    本專題以逢甲大學學生為主要使用對象，規劃開發一套名為「逢甲選課助手（Course Search）」的 Web 應用程式。系統整合以下四大核心功能：
-  </p>
-  <ul>
-    <li><strong>AI 課程分析</strong>：使用者輸入個人背景與目標後，系統呼叫 Claude / GPT 等大型語言模型，提供課程適合度分析與修課建議。</li>
-    <li><strong>課程搜尋與篩選</strong>：整合逢甲完整課程資料庫，支援關鍵字、標籤、學分數等多維度篩選。</li>
-    <li><strong>AI 排課規劃器</strong>：使用者可描述修課目標，由 AI 從全校課程中推薦最符合需求的組合，並自動偵測時間衝堂。</li>
-    <li><strong>社群評分整合</strong>：自動爬取 Dcard 上的課程討論，彙整學長姐心得與評分，作為選課的重要參考。</li>
-  </ul>
-
+  <p>現代大學生每學期選課時，往往面對數百門課程卻難以判斷哪些最適合自己。傳統的課程查詢系統僅能提供基本的課程資訊，如開課時間、學分數與授課教師，缺乏對課程難度、授課品質與個人先備知識的客觀評估依據。</p>
+  <p>此外，學生通常需要在多個平台之間切換，包含校務系統、Dcard 討論版與學長姐的非正式口耳相傳，才能蒐集到足夠的選課參考資訊。這種資訊分散的現象不僅浪費大量時間，也可能導致選課決策品質不佳，影響整體學習效益。</p>
+  <p>根據我們對逢甲大學同學的非正式調查，超過七成的學生表示在選課時曾感到困惑或無所適從，其中最常見的困擾包括：不知道自己的先備知識是否足以應付課程、不知道授課老師的教學風格是否符合自己的學習習慣，以及不確定課程是否能幫助自己達成修課目標。</p>
+  <p>有鑑於此，我們認為有必要建立一個整合式的 AI 輔助選課平台，讓學生能夠在同一個介面內完成搜尋、評估與排課，大幅提升選課效率與滿意度。</p>
   <div class="page-num">3</div>
 </div>
 
-<!-- ═══════════════ CHAPTER 2 ═══════════════ -->
+<!-- PAGE 4: 研究方向 -->
+<div class="page">
+  <div class="section-title">1.2　研究方向</div>
+  <p>本專題以逢甲大學學生為主要使用對象，規劃開發一套名為「逢甲選課助手（Course Search）」的 Web 應用程式。系統整合以下四大核心功能：</p>
+  <ul>
+    <li><strong>AI 課程分析</strong>：使用者輸入個人背景與修課目標後，系統呼叫 Claude / GPT 等大型語言模型，提供課程適合度分析、預期難度評估與個人化修課建議，協助學生在選課前做出更有把握的決策。</li>
+    <li><strong>課程搜尋與篩選</strong>：整合逢甲完整課程資料庫（4,000 筆以上），支援關鍵字、課程標籤（60 餘種）、學分數範圍、開課時間與教師名稱等多維度篩選，快速定位目標課程。</li>
+    <li><strong>AI 排課規劃器</strong>：使用者只需以自然語言描述修課目標，AI 即可自動從全校課程中推薦最符合需求的組合，並即時偵測時間衝堂，以視覺化週課表呈現建議結果。</li>
+    <li><strong>社群評分整合</strong>：透過自動爬蟲定期蒐集 Dcard 上的課程討論文章，利用 AI 彙整學長姐的修課心得與評分，轉化為結構化的課程評價指標，作為選課的重要輔助參考。</li>
+  </ul>
+  <p>系統以 Web 應用程式形式提供，不需要安裝任何額外軟體，學生只需透過瀏覽器即可使用，大幅降低使用門檻。</p>
+  <div class="page-num">4</div>
+</div>
+
+<!-- PAGE 5: 系統特色 -->
+<div class="page">
+  <div class="section-title">1.3　系統特色與創新</div>
+  <p>相較於現有的選課輔助工具，本系統具備以下幾項主要特色與創新：</p>
+
+  <div class="feature-box">
+    <div class="feat-title">① 多 AI 提供者架構</div>
+    <p style="text-indent:0; margin-top:1mm;">系統支援 Anthropic Claude、OpenAI GPT 與 OpenRouter 等多個 AI 提供者，可依需求彈性切換，確保服務穩定性，同時降低對單一 API 的依賴風險。</p>
+  </div>
+
+  <div class="feature-box">
+    <div class="feat-title">② 前後端分離 + API Key 保護</div>
+    <p style="text-indent:0; margin-top:1mm;">所有 AI API Key 均存放於伺服器端，前端不會接觸任何敏感金鑰。前端部署至 Vercel CDN，後端部署至 Railway，兩者透過 HTTPS 通訊，確保資料安全。</p>
+  </div>
+
+  <div class="feature-box">
+    <div class="feat-title">③ PDF 課表智慧解析</div>
+    <p style="text-indent:0; margin-top:1mm;">支援上傳 PDF 格式課表，系統透過 OCR 技術（Mistral OCR 或 Cloudflare AI）自動解析課程名稱、教師、學分與節次，免去手動輸入的繁瑣步驟。</p>
+  </div>
+
+  <div class="feature-box">
+    <div class="feat-title">④ 深色 / 淺色模式 + 中英雙語</div>
+    <p style="text-indent:0; margin-top:1mm;">介面支援一鍵切換深色與淺色模式，並提供完整的中文與英文介面切換功能，照顧不同使用習慣的學生，包含國際交換生。</p>
+  </div>
+
+  <div class="feature-box">
+    <div class="feat-title">⑤ 逢甲 NID OAuth 整合規劃</div>
+    <p style="text-indent:0; margin-top:1mm;">系統預留逢甲大學 NID（Network Identity）OAuth 登入介面，未來待學校開放相關 API 後，學生即可使用學號帳號直接登入，享有個人化的收藏紀錄與分析歷史查閱功能。</p>
+  </div>
+
+  <div class="page-num">5</div>
+</div>
+
+<!-- PAGE 6: CH2 AI趨勢 -->
 <div class="page">
   <div class="chapter-title">第二章　市面分析</div>
-
   <div class="section-title">2.1　AI 輔助教育工具的趨勢</div>
-  <p>
-    近年來，生成式 AI 的快速普及對教育領域帶來顯著影響。根據 Statista 統計，全球 AI in Education 市場規模於 2023 年已超過 40 億美元，並預計在 2030 年達到約 800 億美元。許多大學與科技公司開始將 AI 技術整合至學習輔助工具中，涵蓋課程推薦、智慧問答與學習進度追蹤等功能。
-  </p>
-  <p>
-    在台灣，各大學雖已建置課程查詢系統，但 AI 輔助選課功能相當有限。多數平台仍停留在基本關鍵字搜尋，缺乏個人化推薦與社群評分的整合。這使得 AI 選課助手成為一個具備高度實用性與市場潛力的開發方向。
-  </p>
+  <p>近年來，生成式 AI 的快速普及對教育領域帶來顯著的正面影響。根據 Statista 統計，全球 AI in Education 市場規模於 2023 年已超過 40 億美元，並預計於 2030 年成長至約 800 億美元，年均複合成長率（CAGR）超過 40%。</p>
+  <p>在高等教育方面，各大學與科技公司開始積極將 AI 技術整合至學習輔助工具中。常見的應用方向包含：智慧問答系統、自動作業批改、學習進度追蹤、個人化學習路徑規劃，以及課程推薦系統。</p>
+  <p>在課程推薦領域，美國多所頂尖大學已導入 AI 推薦引擎，根據學生過往修課紀錄、成績分布與職涯目標，自動推薦下學期最適合的課程組合。這類系統不僅提升學生的選課效率，也有助於學校掌握整體課程供需狀況。</p>
+  <p>在台灣，雖然各大學已建置基本的課程查詢系統，但 AI 輔助選課的功能相當有限。多數平台仍停留在基本關鍵字搜尋的階段，缺乏個人化推薦與社群評分的整合。隨著生成式 AI 技術的普及，AI 選課助手正逐漸成為一個具備高度實用性與市場潛力的開發方向。</p>
+  <p>本專題即是針對這一趨勢，以逢甲大學為試驗場域，開發一套結合 AI 分析、社群評分與排課規劃的整合式選課助手，期望能為台灣高等教育的數位化轉型提供實際可行的參考案例。</p>
+  <div class="page-num">6</div>
+</div>
 
+<!-- PAGE 7: 工具比較 -->
+<div class="page">
   <div class="section-title">2.2　與市面上類似工具的比較分析</div>
   <p>以下針對市面上現有的幾款相關工具進行功能比較：</p>
 
   <p><strong>（1）逢甲大學校務系統（官方選課系統）</strong></p>
-  <p>
-    逢甲大學官方提供的選課查詢介面，可依學系、開課時間與課程名稱進行基本篩選。介面以功能性為主，缺乏課程難度評估、社群心得與 AI 推薦功能，使用者無法在同一平台獲得完整的選課參考。
-  </p>
+  <p>逢甲大學官方提供的選課查詢介面，可依學系、開課時間與課程名稱進行基本篩選。介面以功能性為主，缺乏課程難度評估、社群心得與 AI 推薦功能，使用者無法在同一平台獲得完整的選課參考。</p>
 
   <p><strong>（2）Dcard 課程討論版</strong></p>
-  <p>
-    Dcard 上有大量學生分享的修課心得，是目前最廣泛使用的非官方選課參考來源。然而搜尋效率低，資訊未結構化，且缺乏與課程資料庫的連結，使用者必須手動比對。
-  </p>
+  <p>Dcard 上有大量學生分享的修課心得，是目前最廣泛使用的非官方選課參考來源。然而搜尋效率低，資訊未結構化，且缺乏與課程資料庫的連結，使用者必須手動比對。</p>
 
-  <br>
-  <p>下表針對以上工具與本系統進行功能比較：</p>
-
+  <p>以下為功能比較表：</p>
   <table>
     <thead>
       <tr>
@@ -375,352 +216,522 @@
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td>課程搜尋</td>
-        <td>✓</td>
-        <td>△</td>
-        <td>✓</td>
-      </tr>
-      <tr>
-        <td>社群評分</td>
-        <td>✗</td>
-        <td>✓</td>
-        <td>✓（自動爬取）</td>
-      </tr>
-      <tr>
-        <td>AI 課程分析</td>
-        <td>✗</td>
-        <td>✗</td>
-        <td>✓</td>
-      </tr>
-      <tr>
-        <td>AI 排課規劃</td>
-        <td>✗</td>
-        <td>✗</td>
-        <td>✓</td>
-      </tr>
-      <tr>
-        <td>PDF 課表解析</td>
-        <td>✗</td>
-        <td>✗</td>
-        <td>✓</td>
-      </tr>
-      <tr>
-        <td>收藏功能</td>
-        <td>✗</td>
-        <td>✗</td>
-        <td>✓</td>
-      </tr>
-      <tr>
-        <td>中文介面</td>
-        <td>✓</td>
-        <td>✓</td>
-        <td>✓</td>
-      </tr>
+      <tr><td>課程搜尋</td><td>✓</td><td>△</td><td>✓</td></tr>
+      <tr><td>社群評分整合</td><td>✗</td><td>✓</td><td>✓（自動爬取）</td></tr>
+      <tr><td>AI 課程分析</td><td>✗</td><td>✗</td><td>✓</td></tr>
+      <tr><td>AI 排課規劃</td><td>✗</td><td>✗</td><td>✓</td></tr>
+      <tr><td>PDF 課表解析</td><td>✗</td><td>✗</td><td>✓</td></tr>
+      <tr><td>收藏清單</td><td>✗</td><td>✗</td><td>✓</td></tr>
+      <tr><td>多語言介面</td><td>✓（中文）</td><td>✓（中文）</td><td>✓（中 / 英）</td></tr>
+      <tr><td>深色模式</td><td>✗</td><td>✓</td><td>✓</td></tr>
     </tbody>
   </table>
-
-  <p>
-    由比較表可知，本系統在 AI 輔助功能方面具備明顯的差異化優勢，能有效彌補現有工具的不足。
-  </p>
-
-  <div class="page-num">4</div>
+  <div class="page-num">7</div>
 </div>
 
-<!-- ═══════════════ CHAPTER 3 ═══════════════ -->
+<!-- PAGE 8: 定位分析 -->
 <div class="page">
-  <div class="chapter-title">第三章　使用技術</div>
+  <div class="section-title">2.3　本系統的定位與差異化</div>
+  <p>綜合以上分析，現有工具各有其侷限：校務系統功能基礎但缺乏智慧化，Dcard 有豐富內容但缺乏系統化整理。本系統的定位是同時解決這兩個問題，以下列出三個核心差異化優勢：</p>
 
-  <div class="section-title">3.1　前後端技術</div>
+  <div class="feature-box">
+    <div class="feat-title">差異化優勢一：資訊整合</div>
+    <p style="text-indent:0; margin-top:1mm;">將分散在校務系統、Dcard 與學長姐口耳相傳中的選課資訊，統一整合至單一平台，讓學生不再需要在多個管道之間來回切換，大幅縮短資訊蒐集時間。</p>
+  </div>
 
-  <div class="subsection-title">前端（Frontend）</div>
-  <p>
-    前端採用純 HTML + CSS + JavaScript 架構，搭配 Tailwind CSS 進行快速樣式開發，並整合 Google Fonts（Inter、Noto Sans TC）提供中英文排版支援。UI 支援深色／淺色模式切換，並透過自製 i18n.js 實現中英雙語介面。前端靜態檔案部署至 <strong>Vercel</strong> 平台，提供全球 CDN 加速。
-  </p>
+  <div class="feature-box">
+    <div class="feat-title">差異化優勢二：AI 個人化分析</div>
+    <p style="text-indent:0; margin-top:1mm;">不同於靜態的評分數字，本系統的 AI 分析功能能針對每位學生的個人背景（如修過的科目、技能程度、修課目標），提供量身訂作的適合度評估與具體建議，讓選課決策更有依據。</p>
+  </div>
 
-  <div class="subsection-title">後端（Backend）</div>
-  <p>
-    後端採用 <strong>Node.js</strong> 搭配 <strong>Express.js v5</strong> 框架開發 RESTful API 服務。主要功能包含 AI API 代理、使用者認證、收藏管理與意見回饋。安全性方面整合了 <strong>Helmet.js</strong>（HTTP 安全標頭）、<strong>CORS</strong> 限制與 <strong>express-rate-limit</strong> 請求限速。後端部署至 <strong>Railway</strong> 平台，提供穩定的 Node.js 雲端執行環境。
-  </p>
+  <div class="feature-box">
+    <div class="feat-title">差異化優勢三：零安裝 Web 應用</div>
+    <p style="text-indent:0; margin-top:1mm;">以純 Web 形式提供服務，無須安裝任何 App 或插件，在任何裝置的瀏覽器上皆可存取，降低使用門檻，讓更多學生能夠輕鬆上手。</p>
+  </div>
 
-  <div class="section-title">3.2　AI API 整合</div>
-  <p>
-    本系統設計為多 AI 提供者架構，可依環境變數彈性切換：
-  </p>
-  <ul>
-    <li><strong>Anthropic Claude API</strong>（預設）：呼叫 claude-3-5-haiku 等模型，用於課程適合度分析與排課關鍵字提取。回應使用繁體中文，並要求輸出結構化 JSON 格式。</li>
-    <li><strong>OpenAI GPT API</strong>：作為備用提供者，使用 OpenAI-compatible API 介面，可指定 gpt-4o-mini 等模型。</li>
-    <li><strong>OpenRouter</strong>：支援透過 OpenRouter 平台使用多種模型，並可指定 <code>mistral-ocr</code> 或 <code>cloudflare-ai</code> 引擎進行 PDF 課表解析。</li>
-  </ul>
-  <p>
-    所有 API Key 均存放於伺服器端環境變數，前端不會接觸任何金鑰，確保安全性。
-  </p>
-
-  <div class="section-title">3.3　資料庫與部署</div>
-
-  <div class="subsection-title">PostgreSQL 資料庫</div>
-  <p>
-    使用 <strong>PostgreSQL</strong> 作為關聯式資料庫，透過 <strong>pg</strong> 套件（node-postgres）與後端連線。資料庫連線字串透過 <code>DATABASE_URL</code> 環境變數注入，並依據部署環境自動啟用 SSL。
-  </p>
-
-  <div class="subsection-title">使用者認證</div>
-  <p>
-    認證系統採用 <strong>JWT（JSON Web Token）</strong> 進行 Session 管理。未來將整合逢甲大學 <strong>NID OAuth</strong> 服務，讓學生以學號帳號登入，每年 7/31 需重新申請 API KEY。
-  </p>
-
-  <div class="subsection-title">Email 服務</div>
-  <p>
-    意見回饋功能透過 <strong>Resend</strong> API 傳送 Email 通知，設定目標收件信箱由 <code>FEEDBACK_EMAIL</code> 環境變數決定。
-  </p>
-
-  <br>
-  <p>以下為主要套件版本整理：</p>
-  <table>
-    <thead>
-      <tr>
-        <th>套件名稱</th>
-        <th>版本</th>
-        <th>用途</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>express</td><td>^5.1.0</td><td>Web 框架</td></tr>
-      <tr><td>pg</td><td>^8.20.0</td><td>PostgreSQL 連線</td></tr>
-      <tr><td>jsonwebtoken</td><td>^9.0.3</td><td>JWT 認證</td></tr>
-      <tr><td>helmet</td><td>^8.1.0</td><td>HTTP 安全標頭</td></tr>
-      <tr><td>express-rate-limit</td><td>^8.3.1</td><td>請求限速</td></tr>
-      <tr><td>resend</td><td>^6.12.2</td><td>Email 發送</td></tr>
-      <tr><td>dotenv</td><td>^17.2.3</td><td>環境變數管理</td></tr>
-    </tbody>
-  </table>
-
-  <div class="page-num">6</div>
-</div>
-
-<!-- ═══════════════ CHAPTER 4 ═══════════════ -->
-<div class="page">
-  <div class="chapter-title">第四章　系統開發</div>
-
-  <div class="section-title">4.1　UI 設計</div>
-  <p>
-    介面以 Notion 風格為設計基底，提供簡潔、現代的視覺體驗。整體配色分為淺色模式（Notion White）與深色模式（Dark #191919），可由右上角按鈕切換。主要版面區塊如下：
-  </p>
-  <ul>
-    <li><strong>頂部導覽列（Header）</strong>：含 FCU 品牌識別、NID 登入按鈕、語言切換、收藏清單與深色模式切換。</li>
-    <li><strong>課程搜尋區（Search Section）</strong>：整合關鍵字輸入、標籤篩選（AI應用、程式設計、資料庫等）、學分數範圍與快速搜尋。</li>
-    <li><strong>課程卡片列表（Course Cards）</strong>：每張卡片顯示課程名稱、教師、學分、時間、Dcard 評分與標籤，並可一鍵觸發 AI 分析。</li>
-    <li><strong>AI 排課規劃器（Planner）</strong>：使用者輸入目標說明，AI 自動推薦課程組合，並以視覺化週課表呈現結果。</li>
-    <li><strong>收藏側欄（Favorites Panel）</strong>：側滑式面板顯示收藏課程，支援匯出功能。</li>
-    <li><strong>意見回饋（Feedback）</strong>：底部浮動按鈕，點擊後展開回饋表單。</li>
-  </ul>
-
+  <p>本系統目前鎖定逢甲大學學生作為主要使用族群，未來若學校 API 開放，亦可擴展至其他大學，具備良好的橫向擴充潛力。</p>
   <div class="page-num">8</div>
 </div>
 
+<!-- PAGE 9: CH3 前端技術 -->
 <div class="page">
-  <div class="section-title">4.2　系統架構</div>
-  <p>
-    系統採用前後端分離架構，前端部署於 Vercel，後端部署於 Railway，兩者透過 HTTPS API 溝通。資料流如下圖所示：
-  </p>
+  <div class="chapter-title">第三章　使用技術</div>
+  <div class="section-title">3.1　前端技術</div>
+
+  <div class="subsection-title">HTML5 / CSS3 / JavaScript（ES6+）</div>
+  <p>前端採用純 HTML5 + CSS3 + 原生 JavaScript 架構，不依賴 React、Vue 等大型前端框架，以降低打包複雜度並提升部署彈性。所有 UI 邏輯均封裝於單一 app.js 檔案（約 4,800 行），以 IIFE 模式避免全域命名污染。</p>
+
+  <div class="subsection-title">Tailwind CSS</div>
+  <p>樣式採用 Tailwind CSS CDN 版本進行快速開發，搭配自訂設定檔（tailwind.config）擴充 Notion 風格色系與深色模式色票。深色模式以 CSS class 切換實現，不依賴媒體查詢。</p>
+
+  <div class="subsection-title">Google Fonts</div>
+  <p>整合 Google Fonts 的 Inter（英文無襯線）與 Noto Sans TC（中文）字型，確保中英文排版在各系統上均有一致的視覺呈現效果。</p>
+
+  <div class="subsection-title">自製 i18n 國際化模組（i18n.js）</div>
+  <p>開發自製的輕量級多語系模組，支援繁體中文與英文介面切換，翻譯字典約涵蓋 300 餘組文字對應，透過 data-i18n-text 屬性標記需翻譯的 DOM 元素，切換時即時替換文字內容，無需重新載入頁面。</p>
+
+  <div class="subsection-title">Vercel 靜態部署</div>
+  <p>前端靜態檔案透過 vercel.json 設定，部署至 Vercel 全球 CDN 網路。Vercel 提供自動 HTTPS、邊緣節點快取與即時預覽部署（Preview Deployment）功能，每次 Git Push 後自動觸發新版本部署。</p>
+
+  <div class="page-num">9</div>
+</div>
+
+<!-- PAGE 10: 後端技術 -->
+<div class="page">
+  <div class="section-title">3.2　後端技術</div>
+
+  <div class="subsection-title">Node.js</div>
+  <p>後端執行環境採用 Node.js，利用其非同步 I/O 特性高效處理並發的 AI API 請求。使用 ES Module（import/export）語法撰寫，與現代 JavaScript 生態系保持一致。</p>
+
+  <div class="subsection-title">Express.js v5</div>
+  <p>Web 框架採用 Express.js 第五版，提供簡潔的路由管理與中介軟體（middleware）機制。主要功能包含靜態檔案服務（前後端合一模式）、JSON 請求解析、錯誤處理與 API 路由分發。</p>
+
+  <div class="subsection-title">安全性套件</div>
+  <ul>
+    <li><strong>Helmet.js</strong>：自動設定 Content-Security-Policy、X-Frame-Options、HSTS 等 HTTP 安全標頭，防禦常見的 Web 攻擊向量。</li>
+    <li><strong>CORS</strong>：透過 cors 套件設定允許的跨域來源，部署時限定僅接受來自 Vercel 前端網域的請求。</li>
+    <li><strong>express-rate-limit</strong>：對 AI 分析等高成本 API 端點設定請求限速，防止濫用與暴力攻擊。</li>
+  </ul>
+
+  <div class="subsection-title">Railway 雲端部署</div>
+  <p>後端服務部署至 Railway 平台，Railway 自動偵測 Node.js 專案並執行 npm start。環境變數（API Key、資料庫連線字串等）透過 Railway 的環境變數管理介面注入，不暴露於原始碼中。Railway 提供自動重啟、健康檢查與即時日誌監控等功能。</p>
+
+  <div class="page-num">10</div>
+</div>
+
+<!-- PAGE 11: AI API -->
+<div class="page">
+  <div class="section-title">3.3　AI API 整合</div>
+  <p>本系統設計為多 AI 提供者架構，可依環境變數（AI_PROVIDER）彈性切換不同 AI 服務：</p>
+
+  <div class="subsection-title">Anthropic Claude API（預設）</div>
+  <p>預設使用 Anthropic Claude API，呼叫 claude-3-5-haiku 等模型進行課程適合度分析與排課關鍵字提取。回應要求以繁體中文輸出，並以結構化 JSON 格式回傳分析結果，方便前端直接解析使用。</p>
+
+  <div class="subsection-title">OpenAI GPT API</div>
+  <p>作為備用提供者，使用 OpenAI-compatible API 介面，可指定 gpt-4o-mini 等模型。切換至 OpenAI 時系統行為與 Anthropic 版本保持一致，對前端完全透明。</p>
+
+  <div class="subsection-title">OpenRouter</div>
+  <p>支援透過 OpenRouter 平台使用多種開源與商業模型。特別用於 PDF 課表解析功能，可選擇 mistral-ocr（適合掃描型 PDF）或 cloudflare-ai（低成本選項）作為 OCR 引擎，解析上傳的課表圖片並提取結構化課程資訊。</p>
+
+  <table>
+    <thead>
+      <tr><th>提供者</th><th>主要用途</th><th>環境變數</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Anthropic Claude</td><td>課程分析、排課關鍵字</td><td>ANTHROPIC_API_KEY</td></tr>
+      <tr><td>OpenAI GPT</td><td>備用 AI 服務</td><td>OPENAI_API_KEY</td></tr>
+      <tr><td>OpenRouter</td><td>PDF OCR 解析</td><td>OPENAI_API_KEY + OPENAI_BASE_URL</td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-num">11</div>
+</div>
+
+<!-- PAGE 12: DB & Security -->
+<div class="page">
+  <div class="section-title">3.4　資料庫與安全機制</div>
+
+  <div class="subsection-title">PostgreSQL + node-postgres</div>
+  <p>使用 PostgreSQL 作為關聯式資料庫，透過 pg（node-postgres）套件建立連線池（Connection Pool）。連線字串透過環境變數 DATABASE_URL 注入，系統啟動時自動判斷部署環境並決定是否啟用 SSL 加密連線。所有資料表於伺服器啟動時自動建立（CREATE TABLE IF NOT EXISTS），無需手動執行 migration。</p>
+
+  <div class="subsection-title">JWT 認證機制</div>
+  <p>使用者登入後由後端核發 JSON Web Token（JWT），Token 存放於瀏覽器 localStorage。每次呼叫需要認證的 API 時，前端自動在 Authorization Header 帶入 Bearer Token，後端驗證 Token 有效性後才處理請求，防止未授權存取。</p>
+
+  <div class="subsection-title">逢甲 NID OAuth（規劃中）</div>
+  <p>系統已預留逢甲大學 NID OAuth 2.0 登入流程，包含 /api/auth/login 與 /api/auth/callback 端點。待學校資訊處正式開放相關 API 後，即可讓學生以逢甲學號帳號登入，享有個人化功能。NID API KEY 每年 7/31 到期，需定期重新申請。</p>
+
+  <div class="subsection-title">Resend Email 服務</div>
+  <p>意見回饋功能透過 Resend API 傳送 Email 通知至指定信箱。Resend 提供高送達率與詳細的發送紀錄，比傳統 SMTP 設定更為簡便。收件信箱由環境變數 FEEDBACK_EMAIL 設定，無需修改程式碼即可更換。</p>
+
+  <div class="page-num">12</div>
+</div>
+
+<!-- PAGE 13: UI概念 -->
+<div class="page">
+  <div class="chapter-title">第四章　系統開發</div>
+  <div class="section-title">4.1　UI 設計概念</div>
+  <p>本系統的 UI 設計以 Notion 風格為主要靈感，追求簡潔、現代且資訊密度適中的視覺體驗。設計原則如下：</p>
+
+  <ul>
+    <li><strong>色系</strong>：淺色模式以白色（#ffffff）與米白（#f7f7f5）為背景，搭配深灰文字（#37352f）與藍色強調色（#2eaadc）；深色模式以深灰（#191919 / #202020）為主，確保長時間使用時的視覺舒適性。</li>
+    <li><strong>字型</strong>：中文採用 Noto Sans TC，英文採用 Inter，兩者均為現代無襯線字型，在螢幕上具有良好的可讀性。</li>
+    <li><strong>間距</strong>：採用一致的 8px 基準間距系統（Tailwind CSS spacing scale），確保元素之間的視覺節奏感。</li>
+    <li><strong>互動反饋</strong>：按鈕與卡片在 hover 時有輕微的背景色變化與過渡動畫（transition-colors duration-150），提升操作的回饋感。</li>
+    <li><strong>響應式設計</strong>：版面以 max-width: 7xl（1280px）為主要容器，在桌機與平板上均有良好呈現。</li>
+  </ul>
+
+  <p>整體版面採用垂直分區結構，從上到下依序為：頂部導覽列、搜尋篩選區、課程卡片列表、AI 排課規劃器，以及底部意見回饋浮動按鈕。各區塊職責分明，降低使用者的認知負擔。</p>
+
+  <div class="page-num">13</div>
+</div>
+
+<!-- PAGE 14: 功能頁面 -->
+<div class="page">
+  <div class="section-title">4.2　各功能頁面說明</div>
+
+  <div class="subsection-title">頂部導覽列（Header）</div>
+  <p>左側顯示品牌識別（FCU 藍底白字方塊 + 「逢甲選課助手」文字），右側依序排列：NID 登入按鈕、語言切換器（中 / EN）、收藏清單（含未讀計數徽章）、深色模式切換按鈕。所有按鈕均採用圓角設計，hover 狀態有背景色變化提示。</p>
+
+  <div class="subsection-title">課程搜尋區</div>
+  <p>提供關鍵字輸入框（即時搜尋，300ms debounce）、課程標籤多選篩選（60+ 種，可橫向捲動）、學分數範圍滑桿，以及「重置篩選」快捷按鈕。搜尋結果計數即時顯示在搜尋框旁。</p>
+
+  <div class="subsection-title">課程卡片列表</div>
+  <p>每張課程卡片以卡片式（Card）設計顯示課程名稱、授課教師、學分數、開課時間、系所，以及 Dcard 社群評分（星等 1–5 + 綜合分數 0–100）。右上角的收藏按鈕（愛心圖示）可一鍵加入收藏清單；「AI 分析」按鈕點擊後展開側邊分析面板。卡片支援無限捲動（Infinite Scroll）自動載入更多結果。</p>
+
+  <div class="subsection-title">AI 排課規劃器（Planner）</div>
+  <p>使用者在文字輸入框描述修課背景與目標，或上傳 PDF 課表，AI 即自動分析並推薦課程組合。推薦結果以視覺化週課表（7×13 格 = 週一至週五 × 第 1–13 節）呈現，衝堂課程以紅色標示警告。</p>
+
+  <div class="subsection-title">收藏側欄 / 意見回饋</div>
+  <p>收藏側欄為右側滑入式面板，列出所有收藏課程並支援一鍵匯出。意見回饋以底部右下角浮動按鈕呈現，點擊後展開含類型選擇、內容輸入與聯絡方式的回饋表單。</p>
+
+  <div class="page-num">14</div>
+</div>
+
+<!-- PAGE 15: 系統架構 -->
+<div class="page">
+  <div class="section-title">4.3　系統架構</div>
+  <p>系統採用前後端分離架構，前端部署於 Vercel，後端部署於 Railway，兩者透過 HTTPS API 溝通。整體資料流如下：</p>
 
   <div style="margin: 6mm 0;">
     <div class="arch-row">
       <div class="arch-box">
         <strong>使用者瀏覽器</strong><br>
-        <small>index.html / app.js<br>（Vercel CDN）</small>
+        <small>index.html / app.js / i18n.js<br>（Vercel 全球 CDN）</small>
       </div>
     </div>
-    <div class="arch-arrow">↕　HTTPS API 請求</div>
+    <div class="arch-arrow">↕　HTTPS REST API</div>
     <div class="arch-row">
       <div class="arch-box">
         <strong>Express.js 後端</strong><br>
-        <small>server.js<br>（Railway）</small>
+        <small>server.js（Node.js）<br>（Railway 雲端執行）</small>
       </div>
     </div>
-    <div class="arch-arrow">↓　　　　　　↓　　　　　　↓</div>
+    <div class="arch-arrow">↙　　　　　↓　　　　　↘</div>
     <div class="arch-row">
-      <div class="arch-box"><strong>Anthropic API</strong><br><small>Claude 模型</small></div>
-      <div class="arch-box"><strong>PostgreSQL</strong><br><small>Railway DB</small></div>
-      <div class="arch-box"><strong>Resend API</strong><br><small>Email 通知</small></div>
+      <div class="arch-box"><strong>Anthropic API</strong><br><small>Claude 模型<br>課程分析 / 排課</small></div>
+      <div class="arch-box"><strong>PostgreSQL</strong><br><small>Railway 資料庫<br>使用者 / 收藏</small></div>
+      <div class="arch-box"><strong>Resend API</strong><br><small>Email 通知<br>意見回饋</small></div>
     </div>
   </div>
-
   <p class="fig-caption">圖 4-1　系統架構示意圖</p>
 
-  <p>後端 API 端點整理如下：</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Method</th>
-        <th>路徑</th>
-        <th>功能說明</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>POST</td><td>/api/analyze</td><td>AI 分析課程適合度</td></tr>
-      <tr><td>POST</td><td>/api/planner-keywords</td><td>提取排課關鍵字</td></tr>
-      <tr><td>POST</td><td>/api/planner-pdf</td><td>解析 PDF 課表</td></tr>
-      <tr><td>POST</td><td>/api/auth/login</td><td>NID 登入（OAuth）</td></tr>
-      <tr><td>GET/POST</td><td>/api/favorites</td><td>收藏課程管理</td></tr>
-      <tr><td>GET/POST</td><td>/api/planners</td><td>排課計畫管理</td></tr>
-      <tr><td>POST</td><td>/api/ai-analyses</td><td>儲存 AI 分析記錄</td></tr>
-      <tr><td>GET</td><td>/api/dcard-profile</td><td>取得 Dcard 課程評分</td></tr>
-      <tr><td>POST</td><td>/api/feedback</td><td>提交意見回饋</td></tr>
-    </tbody>
-  </table>
+  <p>本機開發時，前後端由同一個 Express 伺服器提供服務（localhost:3000），Express 同時 serve 靜態前端檔案與 API 端點，開發環境與正式環境切換僅需修改 public/config.js 中的 API_BASE_URL 設定。</p>
 
-  <div class="page-num">9</div>
+  <div class="page-num">15</div>
 </div>
 
+<!-- PAGE 16: API端點 -->
 <div class="page">
-  <div class="section-title">4.3　資料庫設計</div>
-  <p>系統使用 PostgreSQL 資料庫，共設計六張資料表，於伺服器啟動時自動建立（若不存在）：</p>
+  <div class="section-title">4.4　API 端點設計</div>
+  <p>後端共設計九個 RESTful API 端點，依功能分為四大類：</p>
 
-  <table>
-    <thead>
-      <tr><th>資料表</th><th>主要欄位</th><th>說明</th></tr>
-    </thead>
+  <p><strong>AI 功能類</strong></p>
+  <table style="font-size:10.5pt;">
+    <thead><tr><th>Method</th><th>路徑</th><th>說明</th></tr></thead>
     <tbody>
-      <tr>
-        <td>users</td>
-        <td>nid, name, unit_name, dept_name</td>
-        <td>學生帳號（以 NID 為主鍵）</td>
-      </tr>
-      <tr>
-        <td>favorites</td>
-        <td>nid, course_id, course_name</td>
-        <td>學生收藏的課程</td>
-      </tr>
-      <tr>
-        <td>ai_analyses</td>
-        <td>nid, course_id, user_context, result</td>
-        <td>AI 分析歷史記錄</td>
-      </tr>
-      <tr>
-        <td>planners</td>
-        <td>nid, name, courses (JSONB)</td>
-        <td>學生建立的排課計畫</td>
-      </tr>
-      <tr>
-        <td>course_dcard_profile</td>
-        <td>course, teacher, tags, score, rating, post_count</td>
-        <td>Dcard 爬取的課程評分資料</td>
-      </tr>
-      <tr>
-        <td>feedbacks</td>
-        <td>type, content, contact, nid</td>
-        <td>使用者意見回饋</td>
-      </tr>
+      <tr><td>POST</td><td>/api/analyze</td><td>AI 分析課程適合度，回傳 JSON 格式建議</td></tr>
+      <tr><td>POST</td><td>/api/planner-keywords</td><td>從自然語言描述提取排課關鍵字與權重</td></tr>
+      <tr><td>POST</td><td>/api/planner-pdf</td><td>接收 PDF 課表，透過 OCR 解析後回傳結構化課程清單</td></tr>
     </tbody>
   </table>
 
-  <div class="section-title">4.4　使用程式碼</div>
+  <p><strong>使用者認證類</strong></p>
+  <table style="font-size:10.5pt;">
+    <thead><tr><th>Method</th><th>路徑</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr><td>POST</td><td>/api/auth/login</td><td>NID OAuth 登入（待正式串接）</td></tr>
+      <tr><td>GET</td><td>/api/auth/callback</td><td>OAuth 回調處理，核發 JWT</td></tr>
+    </tbody>
+  </table>
 
-  <div class="subsection-title">（1）AI 課程分析 API（server.js）</div>
-  <p>
-    以下為後端處理 AI 分析請求的核心程式碼片段，依據使用者背景呼叫 Claude API 並回傳 JSON 格式分析結果：
-  </p>
+  <p><strong>資料管理類</strong></p>
+  <table style="font-size:10.5pt;">
+    <thead><tr><th>Method</th><th>路徑</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr><td>GET / POST / DELETE</td><td>/api/favorites</td><td>取得 / 新增 / 刪除收藏課程</td></tr>
+      <tr><td>GET / POST</td><td>/api/planners</td><td>取得 / 儲存排課計畫（最多保留 5 份）</td></tr>
+      <tr><td>POST</td><td>/api/ai-analyses</td><td>儲存 AI 分析結果至歷史紀錄</td></tr>
+    </tbody>
+  </table>
 
-<pre>// POST /api/analyze
-app.post("/api/analyze", limiter, async (req, res) => {
+  <p><strong>其他功能類</strong></p>
+  <table style="font-size:10.5pt;">
+    <thead><tr><th>Method</th><th>路徑</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td>/api/dcard-profile</td><td>依課程名稱與教師取得 Dcard 評分資料</td></tr>
+      <tr><td>POST</td><td>/api/feedback</td><td>提交意見回饋，觸發 Email 通知</td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-num">16</div>
+</div>
+
+<!-- PAGE 17: DB設計 -->
+<div class="page">
+  <div class="section-title">4.5　資料庫設計</div>
+  <p>系統使用 PostgreSQL 資料庫，共設計六張資料表，於伺服器啟動時自動建立：</p>
+
+  <table>
+    <thead><tr><th>資料表</th><th>主鍵</th><th>主要欄位</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr><td>users</td><td>nid (TEXT)</td><td>name, unit_name, dept_name, created_at</td><td>學生帳號，以逢甲 NID 為主鍵</td></tr>
+      <tr><td>favorites</td><td>id (SERIAL)</td><td>nid (FK), course_id, course_name, added_at</td><td>學生收藏的課程清單</td></tr>
+      <tr><td>ai_analyses</td><td>id (SERIAL)</td><td>nid (FK), course_id, user_context, result, created_at</td><td>AI 課程分析歷史紀錄</td></tr>
+      <tr><td>planners</td><td>id (SERIAL)</td><td>nid (FK), name, courses (JSONB), updated_at</td><td>學生儲存的排課計畫</td></tr>
+      <tr><td>course_dcard_profile</td><td>id (SERIAL)</td><td>course, teacher, tags (JSONB), score, rating, post_count</td><td>Dcard 爬取的課程評分，UNIQUE(course, teacher)</td></tr>
+      <tr><td>feedbacks</td><td>id (SERIAL)</td><td>type, content, contact, nid, created_at</td><td>使用者回饋內容</td></tr>
+    </tbody>
+  </table>
+
+  <p>資料表之間的關聯如下：favorites、ai_analyses、planners 三張表均以 nid 作為外鍵（REFERENCES users(nid)），確保資料一致性。course_dcard_profile 以 (course, teacher) 組合建立 UNIQUE 約束，防止重複爬取。</p>
+
+  <p>planners 表的 courses 欄位採用 PostgreSQL 的 JSONB 格式儲存課程陣列，方便前端直接讀取並渲染週課表，同時保持資料庫 schema 的彈性。</p>
+
+  <div class="page-num">17</div>
+</div>
+
+<!-- PAGE 18: AI課程分析 -->
+<div class="page">
+  <div class="section-title">4.6　AI 課程分析功能</div>
+  <p>AI 課程分析是本系統的核心功能之一。使用者點擊課程卡片上的「AI 分析」按鈕後，系統展開輸入面板，引導使用者輸入個人修課背景（如已修過哪些課、目前的程式能力、修這門課的目的等），再將這些資訊連同課程基本資料一起送往後端的 /api/analyze 端點。</p>
+  <p>後端組合 System Prompt 與使用者資訊後，呼叫 AI 模型進行分析。Prompt 的設計要求 AI 扮演「逢甲大學選課顧問」的角色，以繁體中文回應，並輸出包含以下欄位的 JSON 結構：</p>
+  <ul>
+    <li><strong>suitable</strong>（boolean）：是否推薦修課</li>
+    <li><strong>score</strong>（0–100）：個人化適合度分數</li>
+    <li><strong>reason</strong>（string）：推薦或不推薦的具體理由</li>
+    <li><strong>suggestions</strong>（string[]）：修課建議清單（如先修科目、注意事項等）</li>
+  </ul>
+  <p>分析結果在前端以格式化卡片呈現，包含適合度分數的視覺化指示條（綠色 / 黃色 / 紅色）、詳細理由說明，以及可供點擊展開的建議清單。分析結果同時儲存至 ai_analyses 資料表，方便使用者日後查閱歷史記錄。</p>
+  <p>為防止 AI 回應格式不穩定，後端設有 JSON 解析容錯機制：若 AI 未正確回傳 JSON 格式，系統將嘗試以正規表達式提取 JSON 區塊，並在所有解析方法均失敗時，以純文字形式呈現分析結果，確保使用者不會看到空白或錯誤畫面。</p>
+  <div class="page-num">18</div>
+</div>
+
+<!-- PAGE 19: 排課規劃器 -->
+<div class="page">
+  <div class="section-title">4.7　AI 排課規劃器</div>
+  <p>AI 排課規劃器讓使用者以自然語言描述修課目標，系統根據描述自動從全校課程資料庫中篩選並推薦最適合的課程組合。功能流程如下：</p>
+  <ol>
+    <li>使用者在規劃器輸入框描述背景與目標（例如：「我是資工大二，想加強後端開發與資料庫能力，每週課最多排 4 天」）</li>
+    <li>前端呼叫 /api/planner-keywords，AI 分析描述並提取關鍵字（如「後端」「資料庫」「Node.js」），同時為每個關鍵字評分（0–1 權重）</li>
+    <li>前端利用關鍵字權重與 TAG_SYNONYM_MAP 同義詞對照表，對全校課程進行批量評分，找出最高分的前 N 門課</li>
+    <li>排課規劃器自動偵測課程時間衝堂（以節次陣列交集判斷），確保推薦組合在時間上可行</li>
+    <li>結果以視覺化週課表呈現，每門課以不同顏色區塊顯示，點擊可展開課程詳情</li>
+  </ol>
+  <p><strong>PDF 課表上傳</strong>：使用者亦可上傳現有課表的 PDF 檔案，系統透過 /api/planner-pdf 端點呼叫 OpenRouter OCR 引擎解析課程內容，自動填入排課規劃器，作為「已排課程」的基礎，再由 AI 在空閒時段中補充推薦新課程。</p>
+  <p>排課計畫可儲存至資料庫（planners 表），系統最多保留最近 5 份計畫（超過時自動刪除最舊的），避免資料庫無限增長。</p>
+  <div class="page-num">19</div>
+</div>
+
+<!-- PAGE 20: Dcard爬蟲 -->
+<div class="page">
+  <div class="section-title">4.8　Dcard 評分爬蟲</div>
+  <p>為提供學長姐的真實修課心得作為選課參考，本系統開發了一套 Dcard 自動爬蟲（scripts/crawl-dcard.mjs），定期蒐集逢甲大學 Dcard 版的相關文章，並透過 AI 彙整出結構化的課程評價資料。</p>
+
+  <p><strong>爬蟲流程</strong>：</p>
+  <ol>
+    <li>透過 Dcard API 搜尋逢甲版（fcu）中與選課相關的文章，關鍵字包含「修課」「心得」「推薦」「老師」等</li>
+    <li>過濾並去重複，保留含有明確課程名稱與教師名稱的文章</li>
+    <li>將每篇文章內容送至 AI 進行分析，提取以下資訊：
+      <ul>
+        <li>課程名稱與授課教師</li>
+        <li>課程標籤（難度、出席要求、評分方式等）</li>
+        <li>綜合評分（0–100 分制）</li>
+        <li>學生星等評價（1–5 星）</li>
+        <li>簡要心得摘要</li>
+      </ul>
+    </li>
+    <li>將結構化資料寫入 course_dcard_profile 資料表，若已有該課程記錄則執行 UPSERT 更新</li>
+  </ol>
+
+  <p><strong>前端展示</strong>：課程卡片上的 Dcard 評分區塊顯示星等（⭐ 1–5）與分數（0–100），並在 hover 時展示心得摘要文字，讓學生在瀏覽課程清單時即可快速掌握社群口碑。</p>
+
+  <div class="page-num">20</div>
+</div>
+
+<!-- PAGE 21: 程式碼1 -->
+<div class="page">
+  <div class="section-title">4.9　核心程式碼（一）</div>
+
+  <div class="subsection-title">（1）AI 多提供者切換機制（server.js）</div>
+  <p>系統依環境變數自動切換 AI 提供者，對外提供統一的 callAI() 函式介面：</p>
+<pre>async function callAI(prompt, systemPrompt = "") {
+  if (AI_PROVIDER === "anthropic") {
+    const response = await fetch(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          max_tokens: 2048,
+          system: systemPrompt,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      }
+    );
+    const data = await response.json();
+    return data.content[0].text;
+  } else {
+    // OpenAI-compatible (OpenAI / OpenRouter)
+    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+    const data = await response.json();
+    return data.choices[0].message.content;
+  }
+}</pre>
+  <div class="page-num">21</div>
+</div>
+
+<!-- PAGE 22: 程式碼2 -->
+<div class="page">
+  <div class="section-title">4.9　核心程式碼（二）</div>
+
+  <div class="subsection-title">（2）AI 課程分析端點（server.js）</div>
+<pre>app.post("/api/analyze", limiter, async (req, res) => {
   const { courseName, tags, userContext } = req.body;
-  const prompt = `你是一位逢甲大學的選課顧問，請分析以下課程是否適合學生修習。
+  const prompt = `你是逢甲大學選課顧問，請分析以下課程是否適合學生。
 課程名稱：${courseName}
 課程標籤：${(tags || []).join("、")}
 學生背景：${userContext}
+請以 JSON 回應：{ suitable, score, reason, suggestions }`;
 
-請以 JSON 格式回應，包含：
-- suitable: boolean（是否推薦）
-- score: number（0-100 適合度分數）
-- reason: string（推薦或不推薦的理由）
-- suggestions: string[]（修課建議）`;
-
-  const response = await callAI(prompt);
-  return res.json({ result: response });
+  const result = await callAI(prompt);
+  return res.json({ result });
 });</pre>
 
-  <div class="subsection-title">（2）Dcard 課程爬蟲（scripts/crawl-dcard.mjs）</div>
-  <p>
-    系統透過腳本自動爬取 Dcard 逢甲版的選課心得文章，彙整評分並存入 <code>course_dcard_profile</code> 資料表。資料包含 AI 自動生成的課程標籤、綜合評分（0–100）與學生星等（1–5），供課程卡片展示使用。
-  </p>
-
-  <div class="subsection-title">（3）前端標籤篩選（app.js）</div>
-  <p>
-    前端定義了超過 60 種課程標籤的同義詞對照表（<code>TAG_SYNONYM_MAP</code>），涵蓋資訊、電機、機械、商管、語文、數理等各學院課程類型，使搜尋更具彈性：
-  </p>
-
+  <div class="subsection-title">（3）前端標籤同義詞對照表（app.js）</div>
+  <p>系統定義超過 60 種標籤的同義詞清單，讓搜尋更具彈性，涵蓋各學院的課程類型：</p>
 <pre>const TAG_SYNONYM_MAP = {
-  'AI應用': ['ai', '人工智慧', 'machine learning', '深度學習'],
-  '程式設計': ['程式設計', 'python', 'java', 'javascript', 'c++'],
-  '資料庫': ['資料庫', 'database', 'sql', 'mysql', 'mongodb'],
-  '網頁設計': ['網頁設計', 'html', 'css', '前端', '後端', 'react'],
-  // ...（共 60+ 種標籤）
+  'AI應用':  ['ai','人工智慧','machine learning','深度學習'],
+  '程式設計': ['python','java','javascript','c++','coding'],
+  '資料庫':  ['database','sql','mysql','mongodb','資料管理'],
+  '網頁設計': ['html','css','前端','後端','react','vue'],
+  '資訊安全': ['資安','security','密碼學','網路安全'],
+  '雲端運算': ['cloud','aws','azure','gcp','虛擬化'],
+  // ...（共 60+ 種標籤，涵蓋資訊、電機、商管、語文等）
 };</pre>
 
-  <div class="page-num">11</div>
+  <div class="subsection-title">（4）排課衝堂偵測邏輯（app.js）</div>
+<pre>function hasTimeConflict(courseA, courseB) {
+  const timesA = parseCourseTimes(courseA);
+  const timesB = parseCourseTimes(courseB);
+  return timesA.some(a =>
+    timesB.some(b => a.day === b.day &&
+      a.periods.some(p => b.periods.includes(p)))
+  );
+}</pre>
+
+  <div class="page-num">22</div>
 </div>
 
-<!-- ═══════════════ CHAPTER 5 ═══════════════ -->
+<!-- PAGE 23: 系統測試 -->
+<div class="page">
+  <div class="section-title">4.10　系統測試</div>
+  <p>系統開發完成後，針對各核心功能進行功能性測試，確認系統行為符合預期。以下為主要測試項目與結果：</p>
+
+  <table style="font-size:10.5pt;">
+    <thead>
+      <tr>
+        <th>測試項目</th>
+        <th>測試方法</th>
+        <th>預期結果</th>
+        <th>實際結果</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>課程搜尋（關鍵字）</td><td>輸入「資料結構」</td><td>顯示含「資料結構」課程</td><td>✓ 通過</td></tr>
+      <tr><td>課程搜尋（標籤）</td><td>選擇「AI應用」標籤</td><td>篩選出 AI 相關課程</td><td>✓ 通過</td></tr>
+      <tr><td>AI 課程分析</td><td>輸入背景後送出</td><td>10 秒內回傳 JSON 分析</td><td>✓ 通過</td></tr>
+      <tr><td>AI 排課規劃</td><td>描述目標後產生課表</td><td>推薦無衝堂的課程組合</td><td>✓ 通過</td></tr>
+      <tr><td>PDF 課表上傳</td><td>上傳 PDF 格式課表</td><td>正確解析課程名稱與時間</td><td>✓ 通過</td></tr>
+      <tr><td>收藏新增 / 移除</td><td>點擊愛心按鈕</td><td>計數更新，側欄同步</td><td>✓ 通過</td></tr>
+      <tr><td>深色模式切換</td><td>點擊主題切換按鈕</td><td>全頁面立即切換色系</td><td>✓ 通過</td></tr>
+      <tr><td>語言切換（中 / EN）</td><td>點擊語言切換器</td><td>所有標記元素文字切換</td><td>✓ 通過</td></tr>
+      <tr><td>Rate Limiting</td><td>短時間內大量請求</td><td>429 Too Many Requests</td><td>✓ 通過</td></tr>
+      <tr><td>意見回饋送出</td><td>填寫表單後提交</td><td>成功寫入 DB + 發送 Email</td><td>✓ 通過</td></tr>
+    </tbody>
+  </table>
+
+  <p>整體測試結果均符合預期，系統功能運作穩定。未來可進一步加入自動化測試（如 Jest 單元測試）與壓力測試（如 k6），以確保系統在高流量情境下的可靠性。</p>
+
+  <div class="page-num">23</div>
+</div>
+
+<!-- PAGE 24-25: CH5 進度 -->
 <div class="page">
   <div class="chapter-title">第五章　下學期預期進度</div>
-
-  <p>
-    目前「逢甲選課助手」的整體系統架構與核心功能已大致完善，涵蓋課程搜尋、AI 分析、排課規劃、Dcard 評分整合與意見回饋等模組均已完成開發與測試。
-  </p>
-  <p>
-    然而，若要讓系統真正與逢甲大學校務系統整合，須仰賴學校資訊處正式建立並開放 <strong>NID OAuth API</strong> 及相關校務資料存取介面。目前該 API 尚在申請與規劃階段，預計下學期配合學校行政流程逐步推進。下學期工作將聚焦於以下三個階段：
-  </p>
+  <p>目前「逢甲選課助手」的整體系統架構與核心功能已大致完善，涵蓋課程搜尋、AI 分析、排課規劃、Dcard 評分整合與意見回饋等模組均已完成開發與測試，系統可正常對外提供服務。</p>
+  <p>然而，若要讓系統真正與逢甲大學校務資料深度整合，須仰賴學校資訊處正式建立並開放<strong>修課紀錄等相關 API</strong>，包含選課狀態、修課歷程與成績資料等介面。目前相關 API 尚在等待學校行政規劃與開放時程，預計下學期配合學校進度逐步推進。</p>
+  <p>下學期工作將聚焦於以下三個階段：</p>
   <ul>
-    <li><strong>七、八月</strong>：配合系辦正式申請 NID OAuth API，完成 API 串接與驗證流程測試。</li>
-    <li><strong>九、十月</strong>：建立正式 PostgreSQL 資料庫環境，完成使用者資料、收藏與分析記錄的資料遷移與上線。</li>
-    <li><strong>十一、十二月</strong>：進行系統整合測試、使用者測試與效能優化，完成專題期末成果發表準備。</li>
+    <li><strong>七、八月</strong>：等待並配合學校資訊處開放修課紀錄等相關 API，完成 API 串接規格確認與前後端整合測試。</li>
+    <li><strong>九、十月</strong>：建立正式 PostgreSQL 資料庫正式環境，完成使用者資料、收藏記錄與 AI 分析歷史的資料遷移，確保服務上線穩定性。</li>
+    <li><strong>十一、十二月</strong>：進行完整系統整合測試、使用者體驗優化（UX Refinement）與效能調校，並完成專題期末成果發表準備。</li>
   </ul>
+  <div class="page-num">24</div>
+</div>
 
-  <br>
+<div class="page">
   <p><strong>專題進度甘特圖</strong></p>
 
   <table style="font-size:10.5pt; margin-top:4mm;">
     <thead>
       <tr>
-        <th style="width:22%; text-align:left; padding-left:4mm;">工作項目</th>
-        <th style="width:13%;">七月</th>
-        <th style="width:13%;">八月</th>
-        <th style="width:13%;">九月</th>
-        <th style="width:13%;">十月</th>
+        <th style="width:26%; text-align:left; padding-left:4mm;">工作項目</th>
+        <th style="width:12%;">七月</th>
+        <th style="width:12%;">八月</th>
+        <th style="width:12%;">九月</th>
+        <th style="width:12%;">十月</th>
         <th style="width:13%;">十一月</th>
         <th style="width:13%;">十二月</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td style="text-align:left; padding-left:4mm;">申請 NID OAuth API</td>
+        <td style="text-align:left; padding-left:4mm;">等待修課紀錄等相關 API 開放</td>
         <td style="background:#4a90d9; color:white;">▓</td>
         <td style="background:#4a90d9; color:white;">▓</td>
         <td></td><td></td><td></td><td></td>
       </tr>
       <tr>
-        <td style="text-align:left; padding-left:4mm;">API 串接與驗證測試</td>
+        <td style="text-align:left; padding-left:4mm;">API 串接規格確認與整合測試</td>
         <td></td>
         <td style="background:#4a90d9; color:white;">▓</td>
         <td style="background:#4a90d9; color:white;">▓</td>
         <td></td><td></td><td></td>
       </tr>
       <tr>
-        <td style="text-align:left; padding-left:4mm;">建立正式資料庫</td>
+        <td style="text-align:left; padding-left:4mm;">建立正式資料庫環境</td>
         <td></td><td></td>
         <td style="background:#27ae60; color:white;">▓</td>
         <td style="background:#27ae60; color:white;">▓</td>
         <td></td><td></td>
       </tr>
       <tr>
-        <td style="text-align:left; padding-left:4mm;">資料遷移與上線</td>
+        <td style="text-align:left; padding-left:4mm;">資料遷移與服務上線</td>
         <td></td><td></td><td></td>
         <td style="background:#27ae60; color:white;">▓</td>
         <td style="background:#27ae60; color:white;">▓</td>
         <td></td>
       </tr>
       <tr>
-        <td style="text-align:left; padding-left:4mm;">系統整合測試</td>
+        <td style="text-align:left; padding-left:4mm;">系統整合測試與 UX 優化</td>
         <td></td><td></td><td></td><td></td>
         <td style="background:#e67e22; color:white;">▓</td>
         <td style="background:#e67e22; color:white;">▓</td>
@@ -733,13 +744,13 @@ app.post("/api/analyze", limiter, async (req, res) => {
     </tbody>
   </table>
 
-  <div style="margin-top:5mm; font-size:10pt; display:flex; gap:10mm;">
-    <span>■ <span style="color:#4a90d9;">■</span> API 建構階段</span>
-    <span>■ <span style="color:#27ae60;">■</span> 資料庫建立階段</span>
-    <span>■ <span style="color:#e67e22;">■</span> 專題完成階段</span>
+  <div style="margin-top:5mm; font-size:10.5pt; line-height:2;">
+    <span style="margin-right:10mm;">■ <span style="color:#4a90d9; font-weight:bold;">■ </span>API 建構階段（七～九月）</span><br>
+    <span style="margin-right:10mm;">■ <span style="color:#27ae60; font-weight:bold;">■ </span>資料庫建立階段（九～十一月）</span><br>
+    <span>■ <span style="color:#e67e22; font-weight:bold;">■ </span>專題完成階段（十一～十二月）</span>
   </div>
 
-  <div class="page-num">13</div>
+  <div class="page-num">25</div>
 </div>
 
 </body>
