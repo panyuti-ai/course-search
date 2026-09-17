@@ -1554,6 +1554,7 @@
             state.planner.targetCredits = targetCredits;
         }
         initPlannerChat();
+        updatePlannerGenerateState();
         renderPlanner();
 
         // 供課表選擇彈窗使用：載入已儲存的課表
@@ -1681,6 +1682,7 @@
             if (uploadedCreditsEl) uploadedCreditsEl.classList.add('hidden');
             showToast(error.message || t('pdf-read-failed'), 'error');
         } finally {
+            updatePlannerGenerateState();
             if (fileButton) {
                 fileButton.disabled = false;
                 fileButton.textContent = originalButtonText;
@@ -2584,6 +2586,14 @@
     }
 
     async function generatePlannerRecommendation() {
+        // 課表 PDF 是必要輸入：少了它就沒有節次資料，排出來的課表無法正確避開衝堂
+        const uploaded = state.planner.uploadedCourses;
+        if (!Array.isArray(uploaded) || !uploaded.length) {
+            showToast(t('please-upload-pdf'), 'error');
+            document.getElementById('planner-file-btn')?.focus();
+            return;
+        }
+
         const userContext = elements.userContext?.value?.trim() || '';
         if (!userContext) {
             showToast(t('fill-bg-first'), 'error');
@@ -2682,6 +2692,17 @@
         }
     }
 
+    // 沒上傳課表 PDF 時停用「產生建議課表」，並說明原因
+    function updatePlannerGenerateState() {
+        const btn = elements.plannerGenerate;
+        if (!btn) return;
+        const hasUpload = Array.isArray(state.planner.uploadedCourses) && state.planner.uploadedCourses.length > 0;
+        btn.disabled = !hasUpload;
+        btn.title = hasUpload ? '' : t('please-upload-pdf');
+        btn.classList.toggle('opacity-50', !hasUpload);
+        btn.classList.toggle('cursor-not-allowed', !hasUpload);
+    }
+
     function resetPlannerState() {
         // 只還原選課結果，保留 PDF 上傳狀態
         state.planner.pool = [];
@@ -2697,6 +2718,7 @@
             ? state.planner.uploadedCourses
             : [];
         if (!uploadedCourses.length) {
+            // 正常流程已在 generatePlannerRecommendation 擋下，這裡僅作為防禦
             const fallbackCourses = buildPlannerCatalogCandidates();
             return {
                 courses: fallbackCourses,
@@ -4203,6 +4225,15 @@
         renderPlannerChat();
     }
 
+    // 關聯分數本身沒有參考點，附上文字等級讓使用者知道這個數字算高還是低。
+    // 門檻對應 AI 關鍵字的計分方式：課名完全命中高權重關鍵字約 30 分、部分命中約 20 分。
+    function getPlannerRelevanceTier(score) {
+        if (!Number.isFinite(score) || score <= 0) return '';
+        if (score >= 25) return ' · 高度相關';
+        if (score >= 10) return ' · 相關';
+        return ' · 略相關';
+    }
+
     function createPlannerCourseCard(course, options = {}) {
         const card = document.createElement('article');
         card.className = 'rounded-md border border-notion-border dark:border-dark-border bg-notion-bg-secondary dark:bg-dark-bg-secondary p-3 flex flex-col gap-1.5';
@@ -4245,7 +4276,8 @@
         const pinnedLabel = course.pinned ? '已上傳課程' : (course.required ? '必修' : '可選課程');
         const displayRelevance = Number.isFinite(course.relevance) ? Math.max(0, course.relevance - (course.required ? 10000 : 0)) : 0;
         const relevanceLabel = displayRelevance.toFixed(1);
-        info.textContent = `${pinnedLabel}｜${course.credits} 學分｜關聯分數 ${relevanceLabel}｜${timeLabel}`;
+        const relevanceTier = getPlannerRelevanceTier(displayRelevance);
+        info.textContent = `${pinnedLabel}｜${course.credits} 學分｜關聯分數 ${relevanceLabel}${relevanceTier}｜${timeLabel}`;
         card.appendChild(info);
 
         const reasonText = buildPlannerReasonText(course);
