@@ -1653,20 +1653,7 @@
             state.planner.warnings = parsed.warnings.slice();
             state.planner.studentGrade = parsed.studentGrade ?? null;
 
-            // Show current credit total below the file input
-            const totalCredits = enriched.reduce((sum, c) => sum + (c.credits || 0), 0);
-            if (uploadedCreditsEl) {
-                const grade = state.planner.studentGrade;
-                const gradeText = grade ? t('grade-label', { g: grade }) : '';
-                const minCredits = grade && grade >= 4 ? 9 : 12;
-                const minHint = grade
-                    ? t(grade >= 4 ? 'grade-hint-upper' : 'grade-hint-lower', { min: minCredits })
-                    : '';
-                uploadedCreditsEl.textContent = t('recognized-courses', {
-                    n: enriched.length, grade: gradeText, credits: totalCredits, hint: minHint
-                });
-                uploadedCreditsEl.classList.remove('hidden');
-            }
+            updatePlannerUploadedSummary();
 
             if (fileNameEl) fileNameEl.textContent = file.name;
 
@@ -2695,6 +2682,30 @@
     }
 
     // 沒上傳課表 PDF 時停用「產生建議課表」，並說明原因
+    // 已辨識課程數與已修學分的摘要。上傳後與移除課程後都要重算，
+    // 否則移除已解除固定的課之後，這行仍會顯示舊的數字。
+    function updatePlannerUploadedSummary() {
+        const el = document.getElementById('planner-uploaded-credits');
+        if (!el) return;
+        const uploaded = Array.isArray(state.planner.uploadedCourses) ? state.planner.uploadedCourses : [];
+        if (!uploaded.length) {
+            el.classList.add('hidden');
+            el.textContent = '';
+            return;
+        }
+        const totalCredits = uploaded.reduce((sum, c) => sum + (c.credits || 0), 0);
+        const grade = state.planner.studentGrade;
+        const gradeText = grade ? t('grade-label', { g: grade }) : '';
+        const minCredits = grade && grade >= 4 ? 9 : 12;
+        const minHint = grade
+            ? t(grade >= 4 ? 'grade-hint-upper' : 'grade-hint-lower', { min: minCredits })
+            : '';
+        el.textContent = t('recognized-courses', {
+            n: uploaded.length, grade: gradeText, credits: totalCredits, hint: minHint
+        });
+        el.classList.remove('hidden');
+    }
+
     function updatePlannerGenerateState() {
         const btn = elements.plannerGenerate;
         if (!btn) return;
@@ -3119,7 +3130,7 @@
         state.planner.selected.forEach((item) => {
             if (item.course === course.course) item.pinned = false;
         });
-        showToast(`「${course.course}」已解除固定，現在可以移除了。`, 'success');
+        showToast(t('planner-unpinned', { name: course.course }), 'success');
         renderPlanner();
     }
 
@@ -3132,6 +3143,17 @@
         }
         state.planner.selected.delete(courseId);
         delete course.selectReason;
+
+        // 已解除固定的上傳課程要從上傳清單一併移除，否則動態課表、匯出 PDF、
+        // 衝堂判斷與儲存的 fixedCourses 都還會認為這門課存在
+        if (state.planner.unpinnedCourses.has(course.course)) {
+            state.planner.unpinnedCourses.delete(course.course);
+            state.planner.uploadedCourses = (state.planner.uploadedCourses || [])
+                .filter((item) => toPlannerString(item?.course ?? item?.name) !== course.course);
+            state.planner.pool = state.planner.pool.filter((item) => item.id !== courseId);
+            updatePlannerUploadedSummary();
+            updatePlannerGenerateState();
+        }
         // fromCard entry 移除後也從 pool 清掉，不出現在候選清單
         if (course.fromCard) {
             state.planner.pool = state.planner.pool.filter((c) => c.id !== courseId);
@@ -3215,14 +3237,12 @@
             const fragment = document.createDocumentFragment();
             selectedList.forEach((course) => {
                 const card = createPlannerCourseCard(course, {
-                    actionLabel: course.pinned ? '解除固定' : t('planner-remove'),
+                    actionLabel: course.pinned ? t('planner-unpin') : t('planner-remove'),
                     onAction: course.pinned
                         ? () => plannerUnpinCourse(course.id)
                         : () => plannerRemoveCourse(course.id),
                     actionDisabled: false,
-                    actionTitle: course.pinned
-                        ? '這門課來自上傳的課表。若是你自己加選的，可以解除固定後移除。'
-                        : ''
+                    actionTitle: course.pinned ? t('planner-unpin-hint') : ''
                 });
                 fragment.appendChild(card);
             });
