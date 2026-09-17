@@ -4200,7 +4200,7 @@
         }
         const difficultyHit = hits.find((hit) => hit.type === 'difficulty');
         if (difficultyHit && difficultyHit.value <= 3) {
-            const level = difficultyHit.value <= 2 ? '負擔較輕' : '難度中等';
+            const level = difficultyHit.value <= 2 ? '負擔較輕' : '負擔中等';
             reasons.push(`難度 ${stringifyScore(difficultyHit.value)}／5，${level}`);
         }
 
