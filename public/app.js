@@ -126,7 +126,7 @@
     const STORAGE_KEY_FAVORITES = 'course-search:favorites';
     const STORAGE_KEY_THEME = 'course-search:theme';
 
-    const PAGE_SIZE = 20;
+    const PAGE_SIZE = 21;   // 每行 3 張 × 7 行，剛好填滿不留缺角
     const PDFJS_WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     const state = {
@@ -858,18 +858,22 @@
             return true;
         });
 
-        results = sortCourses(results);
-
-        // 同課名同老師只保留第一筆（排序後最相關/最新的），不同老師各自保留
+        // 同課名同老師只保留一筆，固定留「開課學期最新」的那筆，不同老師各自保留。
+        // 必須在排序之前做：若等排序後才去重，留下的是哪一筆會隨使用者選的排序方式而變，
+        // 而檔案順序是由舊到新，等於最新學期永遠被舊學期蓋掉。
         {
-            const seen = new Map();
-            results = results.filter((course) => {
+            const bestByKey = new Map();
+            results.forEach((course) => {
                 const key = `${(course.course || '').trim()}|${(course.teacher || '').trim()}`;
-                if (seen.has(key)) return false;
-                seen.set(key, true);
-                return true;
+                const previous = bestByKey.get(key);
+                if (!previous || compareSemesterDesc(course, previous) < 0) {
+                    bestByKey.set(key, course);
+                }
             });
+            results = Array.from(bestByKey.values());
         }
+
+        results = sortCourses(results);
 
         renderResults(results);
         updateSummary(results.length, {
@@ -894,11 +898,36 @@
         }
         syncStateToURL(queryRaw, minDiff, maxDiff, minScore);
     }
+    // "115-1" → 1151，方便直接比大小；無法解析（空字串等）回傳 null。
+    function parseSemesterKey(value) {
+        const match = /^(\d+)-(\d+)$/.exec(String(value || '').trim());
+        if (!match) return null;
+        return Number(match[1]) * 10 + Number(match[2]);
+    }
+
+    // 新學期排前面；沒有學期資訊的一律排最後。
+    function compareSemesterDesc(a, b) {
+        const keyA = parseSemesterKey(a.semester);
+        const keyB = parseSemesterKey(b.semester);
+        if (keyA === keyB) return 0;
+        if (keyA === null) return 1;
+        if (keyB === null) return -1;
+        return keyB - keyA;
+    }
+
     function sortCourses(list) {
         const mode = elements.sortSelect.value;
         const collator = new Intl.Collator('zh-Hant', { numeric: true, sensitivity: 'base' });
         const copy = list.slice();
-        if (mode === 'score') {
+        if (mode === 'semester') {
+            copy.sort((a, b) => {
+                const semesterCompare = compareSemesterDesc(a, b);
+                if (semesterCompare !== 0) return semesterCompare;
+                const courseCompare = collator.compare(a.course, b.course);
+                if (courseCompare !== 0) return courseCompare;
+                return collator.compare(a.teacher || '', b.teacher || '');
+            });
+        } else if (mode === 'score') {
             copy.sort((a, b) => {
                 const scoreA = getNumericScore(a);
                 const scoreB = getNumericScore(b);
@@ -5155,7 +5184,7 @@
         if (maxDiff !== null) params.set('maxDiff', maxDiff);
         if (minScore !== null) params.set('minScore', minScore);
         const sort = elements.sortSelect.value;
-        if (sort && sort !== 'course') params.set('sort', sort);
+        if (sort && sort !== 'semester') params.set('sort', sort);
         const url = params.toString() ? `?${params.toString()}` : window.location.pathname;
         history.replaceState(null, '', url);
     }
