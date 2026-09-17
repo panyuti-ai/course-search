@@ -214,6 +214,15 @@ const analyzeRateLimiter = rateLimit({
   message: { error: "請求過於頻繁，請稍後再試。" },
 });
 
+// 聊天是一來一往的互動，頻率天生比「按一次分析」高，因此放寬到每分鐘 30 次
+const chatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "訊息傳送太快，請稍等一下再說。" },
+});
+
 // JWT 驗證 middleware
 function requireAuth(req, res, next) {
   const auth = req.headers.authorization;
@@ -451,6 +460,158 @@ app.post("/api/planner-keywords", requireAuth, analyzeRateLimiter, async (req, r
     return res.json({ keywords });
   } catch (error) {
     console.error("planner-keywords error:", error);
+    return res.status(500).json({ error: "伺服器處理時發生錯誤。" });
+  }
+});
+
+// 課表聊天助理：針對已排出的課表提供說明與調整建議
+// 回傳的建議一律交由前端呈現給使用者確認，後端不直接更動任何課表資料
+const CHAT_MAX_HISTORY = 16;      // 最多帶入 8 輪對話
+const CHAT_MAX_SELECTED = 40;     // 目前課表最多列入的課程數
+const CHAT_MAX_CANDIDATES = 60;   // 候選清單最多列入的課程數
+const CHAT_MAX_ACTIONS = 5;       // 單次最多建議的調整數
+
+function formatChatCourseLines(courses, prefix) {
+  return courses
+    .map((course, index) => {
+      const slots = Array.isArray(course.timeSlots) && course.timeSlots.length
+        ? course.timeSlots.join(", ")
+        : "節次未提供";
+      const credits = Number.isFinite(course.credits) ? course.credits : "?";
+      const teacher = course.teacher ? `｜${course.teacher}` : "";
+      const pinned = course.pinned ? "｜已上傳課表（不可移除）" : "";
+      const required = course.required ? "｜必修" : "";
+      return `[${prefix}${index + 1}] ${course.course}${teacher}｜${credits} 學分｜${slots}${required}${pinned}`;
+    })
+    .join("\n");
+}
+
+// 只取 prompt 需要的欄位，避免把整包課程資料送進 AI
+function normalizeChatCourses(list, limit) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((item) => item && typeof item === "object" && typeof item.course === "string" && item.course.trim())
+    .slice(0, limit)
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : String(item.id ?? ""),
+      course: item.course.trim().slice(0, 80),
+      teacher: typeof item.teacher === "string" ? item.teacher.trim().slice(0, 40) : "",
+      credits: Number.isFinite(item.credits) ? item.credits : null,
+      timeSlots: Array.isArray(item.timeSlots)
+        ? item.timeSlots.filter((slot) => typeof slot === "string").slice(0, 12)
+        : [],
+      required: Boolean(item.required),
+      pinned: Boolean(item.pinned),
+    }));
+}
+
+// 把 AI 回傳的課程代號還原成實際課程；找不到或不合法的一律丟棄，
+// 確保前端拿到的建議一定對應到真實存在、且允許被調整的課程
+function resolveChatActions(rawActions, selected, candidates) {
+  return (Array.isArray(rawActions) ? rawActions : [])
+    .map((action) => {
+      if (!action || (action.type !== "remove" && action.type !== "add")) return null;
+      const ref = typeof action.ref === "string" ? action.ref.trim().toUpperCase() : "";
+      const match = ref.match(/^([SC])(\d+)$/);
+      if (!match) return null;
+      // remove 只能作用在目前課表（S）、add 只能作用在候選清單（C）
+      if (action.type === "remove" && match[1] !== "S") return null;
+      if (action.type === "add" && match[1] !== "C") return null;
+      const pool = match[1] === "S" ? selected : candidates;
+      const course = pool[Number(match[2]) - 1];
+      if (!course || !course.id) return null;
+      // 已上傳課表的固定課程不可移除
+      if (action.type === "remove" && course.pinned) return null;
+      return {
+        type: action.type,
+        courseId: course.id,
+        courseName: course.course,
+        credits: course.credits,
+        timeSlots: course.timeSlots,
+        reason: typeof action.reason === "string" ? action.reason.trim().slice(0, 100) : "",
+      };
+    })
+    .filter(Boolean)
+    .slice(0, CHAT_MAX_ACTIONS);
+}
+
+app.post("/api/planner-chat", requireAuth, chatRateLimiter, async (req, res) => {
+  if (!getActiveApiKey()) {
+    return res.status(503).json({ error: "伺服器尚未設定 AI API key。" });
+  }
+
+  const { message, history, planner } = req.body || {};
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return res.status(400).json({ error: "請輸入訊息。" });
+  }
+
+  const selected = normalizeChatCourses(planner?.selected, CHAT_MAX_SELECTED);
+  const candidates = normalizeChatCourses(planner?.candidates, CHAT_MAX_CANDIDATES);
+  if (!selected.length) {
+    return res.status(400).json({ error: "目前沒有課表可以討論，請先產生建議課表。" });
+  }
+
+  const targetCredits = Number.isFinite(planner?.targetCredits) ? planner.targetCredits : null;
+  const currentCredits = selected.reduce((sum, c) => sum + (Number.isFinite(c.credits) ? c.credits : 0), 0);
+  const userContext = typeof planner?.userContext === "string" ? planner.userContext.trim().slice(0, 500) : "";
+
+  // 對話歷史以文字形式帶入 prompt，維持 callAI 對兩種 provider 的相容性
+  const historyText = Array.isArray(history)
+    ? history
+        .filter((item) => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string")
+        .slice(-CHAT_MAX_HISTORY)
+        .map((item) => `${item.role === "user" ? "學生" : "助理"}：${item.content.trim().slice(0, 500)}`)
+        .join("\n")
+    : "";
+
+  const prompt = `你是一位大學選課助理，正在和學生討論他剛排出來的課表。
+
+學生背景：${userContext || "未提供"}
+目標學分：${targetCredits ?? "未指定"}
+目前已選學分：${currentCredits}
+
+目前課表（代號 S 開頭）：
+${formatChatCourseLines(selected, "S") || "（無）"}
+
+可加入的候選課程（代號 C 開頭）：
+${formatChatCourseLines(candidates, "C") || "（無）"}
+
+${historyText ? `先前的對話：\n${historyText}\n` : ""}
+學生這次說：${message.trim().slice(0, 500)}
+
+請遵守以下規則：
+1. 只能使用上面清單裡出現過的課程，**嚴禁自行編造**課程名稱或代號。
+2. 要調整課表時，請用課程代號（例如 S2、C7）指定，不要寫課程全名當代號。
+3. 標示「已上傳課表（不可移除）」的課程**不可以**建議移除。
+4. 單次最多建議 ${CHAT_MAX_ACTIONS} 項調整；若學生只是提問，actions 請留空陣列。
+5. 若學生的要求無法達成（例如候選清單裡沒有符合的課），請在 reply 中說明原因，不要硬湊。
+6. reply 用繁體中文，2-4 句，直接說明你做了什麼判斷，不要客套。
+
+只回傳 JSON，格式如下：
+{"reply": "說明文字", "actions": [{"type": "remove", "ref": "S2", "reason": "星期五的課"}]}
+type 只能是 "remove"（從目前課表移除）或 "add"（從候選清單加入）。`;
+
+  try {
+    const content = await callAI(prompt, { json: true, temperature: 0.4 });
+    if (!content) return res.status(502).json({ error: "AI 未回傳內容。" });
+
+    const start = content.indexOf("{");
+    const end = content.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      console.error("planner-chat: no JSON found in content:", content.slice(0, 200));
+      return res.status(502).json({ error: "AI 回傳格式錯誤。" });
+    }
+    const parsed = JSON.parse(content.slice(start, end + 1));
+
+    const actions = resolveChatActions(parsed.actions, selected, candidates);
+
+    const reply = typeof parsed.reply === "string" && parsed.reply.trim()
+      ? parsed.reply.trim().slice(0, 600)
+      : "我看過你的課表了，但沒有想到合適的調整建議。";
+
+    return res.json({ reply, actions });
+  } catch (error) {
+    console.error("planner-chat error:", error);
     return res.status(500).json({ error: "伺服器處理時發生錯誤。" });
   }
 });
