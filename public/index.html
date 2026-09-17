@@ -400,6 +400,12 @@
         </svg>
     </button>
 
+    <!-- 產生課表後浮出的提示，點擊可直接開啟助理 -->
+    <button id="planner-chat-hint" type="button"
+        class="fixed bottom-32 right-[4.25rem] z-30 hidden h-9 items-center max-w-[min(15rem,calc(100vw-7rem))] px-3 rounded-md bg-notion-accent text-white text-xs font-medium shadow-md hover:opacity-90 transition-opacity whitespace-nowrap overflow-hidden text-ellipsis">
+        課表排好了，想調整可以問我
+    </button>
+
     <div id="planner-chat-panel"
         class="fixed bottom-6 right-6 z-50 hidden flex-col w-[min(320px,calc(100vw-3rem))] h-[min(620px,calc(100vh-5rem))] bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border rounded-xl shadow-xl overflow-hidden">
         <div class="flex items-center justify-between px-3 py-2 bg-notion-bg-secondary dark:bg-dark-bg-secondary border-b border-notion-border dark:border-dark-border shrink-0">
