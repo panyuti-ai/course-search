@@ -147,7 +147,8 @@
             hasPlan: false,
             warnings: [],
             studentGrade: null,
-            shuffleSeed: 0
+            shuffleSeed: 0,
+            candidateExpanded: { bg: false, other: false }
         },
         plannerChat: {
             open: false,
@@ -2653,6 +2654,7 @@
         const built = buildPlannerPool(parsed.courses, aiKeywords);
         state.planner.pool = built.pool;
         state.planner.selected = new Map();
+        state.planner.candidateExpanded = { bg: false, other: false };
         state.planner.warnings = [...parsed.warnings, ...built.warnings];
         autoSelectPlannerCourses(aiKeywords.length > 0);
         state.planner.hasPlan = true;
@@ -2681,6 +2683,7 @@
         state.planner.selected = new Map();
         state.planner.warnings = [];
         state.planner.hasPlan = false;
+        state.planner.candidateExpanded = { bg: false, other: false };
         renderPlanner();
     }
 
@@ -3091,6 +3094,30 @@
         renderPlanner();
     }
 
+    const CANDIDATE_MIN_VISIBLE = 5;      // 課表門數太少時，候選仍要有得挑
+    const CANDIDATE_MAX_VISIBLE = 12;     // 課表門數很多時，避免候選清單過長
+    const CANDIDATE_EXPANDED_LIMIT = 30;  // 按下「顯示更多」後每區的上限
+
+    // 預設顯示門數跟著目前課表走，讓左右兩欄高度相近
+    function getPlannerCandidateQuota(selectedCount) {
+        const n = Number.isFinite(selectedCount) ? selectedCount : 0;
+        return Math.max(CANDIDATE_MIN_VISIBLE, Math.min(n, CANDIDATE_MAX_VISIBLE));
+    }
+
+    // 兩區對半分；某一區課程不足時，剩下的配額讓給另一區
+    function splitCandidateQuota(total, bgLength, otherLength) {
+        if (!bgLength) return { bg: 0, other: Math.min(total, otherLength) };
+        if (!otherLength) return { bg: Math.min(total, bgLength), other: 0 };
+        let bg = Math.min(bgLength, Math.ceil(total / 2));
+        let other = Math.min(otherLength, total - bg);
+        const leftover = total - bg - other;
+        if (leftover > 0) {
+            bg = Math.min(bgLength, bg + leftover);
+            other = Math.min(otherLength, total - bg);
+        }
+        return { bg, other };
+    }
+
     function renderPlanner() {
         if (!elements.plannerSummary || !elements.plannerSelectedList || !elements.plannerCandidateList) return;
         document.dispatchEvent(new CustomEvent('planner-updated'));
@@ -3223,14 +3250,20 @@
             teacherMap.get(name).push(c);
         });
 
-        function appendSection(container, title, list, limit) {
+        function appendSection(container, title, list, limit, sectionKey) {
             if (!list.length) return;
+            const expanded = Boolean(state.planner.candidateExpanded?.[sectionKey]);
+            const shown = expanded
+                ? Math.min(list.length, CANDIDATE_EXPANDED_LIMIT)
+                : Math.min(list.length, limit);
+
             const header = document.createElement('h5');
             header.className = 'text-xs font-semibold text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider mt-3 mb-1';
             header.textContent = title;
             container.appendChild(header);
+
             const frag = document.createDocumentFragment();
-            list.slice(0, limit).forEach((course) => {
+            list.slice(0, shown).forEach((course) => {
                 const conflict = hasPlannerConflictWithSelected(course, state.planner.selected);
                 const teachers = teacherMap.get(course.course) || [course];
                 const card = createPlannerCourseCard(course, {
@@ -3242,10 +3275,30 @@
                 frag.appendChild(card);
             });
             container.appendChild(frag);
+
+            const remaining = Math.min(list.length, CANDIDATE_EXPANDED_LIMIT) - shown;
+            if (remaining > 0) {
+                const more = document.createElement('button');
+                more.type = 'button';
+                more.className = 'w-full mt-1 py-1.5 rounded-md text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary border border-dashed border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors';
+                more.textContent = `還有 ${remaining} 門，顯示更多`;
+                more.addEventListener('click', () => {
+                    state.planner.candidateExpanded[sectionKey] = true;
+                    renderPlanner();
+                });
+                container.appendChild(more);
+            }
         }
 
-        appendSection(candidateContainer, '依照背景補充說明推薦課程', bgList, 30);
-        appendSection(candidateContainer, '其他推薦課程', otherList, 30);
+        // 候選清單預設顯示的門數跟著目前課表走，讓左右兩欄高度相近；
+        // 課程太少時沒得挑、太多時頁面又會過長，因此設下上下限。
+        const quota = splitCandidateQuota(
+            getPlannerCandidateQuota(state.planner.selected.size),
+            bgList.length,
+            otherList.length
+        );
+        appendSection(candidateContainer, '依照背景補充說明推薦課程', bgList, quota.bg, 'bg');
+        appendSection(candidateContainer, '其他推薦課程', otherList, quota.other, 'other');
 
         renderPlannerTimetable();
     }
