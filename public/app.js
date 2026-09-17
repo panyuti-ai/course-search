@@ -148,6 +148,11 @@
             warnings: [],
             studentGrade: null,
             shuffleSeed: 0
+        },
+        plannerChat: {
+            open: false,
+            sending: false,
+            messages: []
         }
     };
 
@@ -188,6 +193,13 @@
         plannerTimetableLegend: document.getElementById('planner-timetable-legend'),
         floatingTimetable: document.getElementById('floating-timetable'),
         floatingTimetableTable: document.getElementById('floating-timetable-table'),
+        plannerChatBtn: document.getElementById('planner-chat-btn'),
+        plannerChatPanel: document.getElementById('planner-chat-panel'),
+        plannerChatClose: document.getElementById('planner-chat-close'),
+        plannerChatMessages: document.getElementById('planner-chat-messages'),
+        plannerChatForm: document.getElementById('planner-chat-form'),
+        plannerChatInput: document.getElementById('planner-chat-input'),
+        plannerChatSend: document.getElementById('planner-chat-send'),
     };
     const plannerAddButtonUpdaters = new Set();
     let plannerUpdatedListenerBound = false;
@@ -1536,6 +1548,7 @@
         if (Number.isFinite(targetCredits) && targetCredits >= 0) {
             state.planner.targetCredits = targetCredits;
         }
+        initPlannerChat();
         renderPlanner();
 
         // 供課表選擇彈窗使用：載入已儲存的課表
@@ -3081,6 +3094,7 @@
     function renderPlanner() {
         if (!elements.plannerSummary || !elements.plannerSelectedList || !elements.plannerCandidateList) return;
         document.dispatchEvent(new CustomEvent('planner-updated'));
+        updatePlannerChatVisibility();
 
         const summary = elements.plannerSummary;
         const selectedContainer = elements.plannerSelectedList;
@@ -3731,6 +3745,11 @@
         const floating = elements.floatingTimetable;
         const wrap = elements.plannerTimetableWrap;
         if (!floating || !wrap) return;
+        // 窄螢幕放不下兩個浮動視窗，聊天展開時讓動態課表先退場
+        if (state.plannerChat.open && window.innerWidth < 640) {
+            floating.classList.add('hidden');
+            return;
+        }
         if (wrap.classList.contains('hidden')) {
             floating.classList.add('hidden');
             return;
@@ -3744,6 +3763,257 @@
         } else if (floating.dataset.manuallyClosed !== 'true') {
             floating.classList.remove('hidden');
         }
+    }
+
+    // ── 課表助理聊天 ──────────────────────────────────────────
+    // 助理只會提出建議，實際增減一律由使用者按下確認後，
+    // 透過既有的 plannerAddCourse／plannerRemoveCourse 執行，衝堂等檢查因此完整保留。
+
+    const PLANNER_CHAT_MAX_HISTORY = 16;     // 送給後端的對話則數（8 輪）
+    const PLANNER_CHAT_MAX_CANDIDATES = 60;  // 送給後端的候選課程數，與後端上限一致
+    const PLANNER_CHAT_GREETING =
+        '你的課表排好了。想調整的話直接說，例如「幫我拿掉星期五的課」、' +
+        '「有沒有比較輕鬆的課可以換」，或是問我為什麼會推薦某一門課。';
+
+    function initPlannerChat() {
+        const btn = elements.plannerChatBtn;
+        const form = elements.plannerChatForm;
+        if (!btn || !elements.plannerChatPanel || !form) return;
+
+        btn.addEventListener('click', () => togglePlannerChat(!state.plannerChat.open));
+        elements.plannerChatClose?.addEventListener('click', () => togglePlannerChat(false));
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const input = elements.plannerChatInput;
+            const text = input?.value?.trim();
+            if (!text || state.plannerChat.sending) return;
+            input.value = '';
+            sendPlannerChatMessage(text);
+        });
+    }
+
+    function togglePlannerChat(open) {
+        const panel = elements.plannerChatPanel;
+        if (!panel) return;
+        state.plannerChat.open = Boolean(open);
+        if (state.plannerChat.open) {
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+            if (!state.plannerChat.messages.length) {
+                state.plannerChat.messages.push({ role: 'assistant', content: PLANNER_CHAT_GREETING });
+            }
+            renderPlannerChat();
+            elements.plannerChatInput?.focus();
+        } else {
+            panel.classList.add('hidden');
+            panel.classList.remove('flex');
+        }
+        // 窄螢幕上兩個浮動視窗會擠在一起，開聊天時讓動態課表讓位
+        updateFloatingTimetableVisibility();
+    }
+
+    // 沒有課表就沒東西可討論（後端也會擋），因此排出課表後才顯示入口
+    function updatePlannerChatVisibility() {
+        const btn = elements.plannerChatBtn;
+        if (!btn) return;
+        const hasPlan = state.planner.hasPlan && state.planner.selected.size > 0;
+        btn.classList.toggle('hidden', !hasPlan);
+        if (!hasPlan && state.plannerChat.open) {
+            togglePlannerChat(false);
+        }
+    }
+
+    function updatePlannerChatSendState() {
+        const sending = state.plannerChat.sending;
+        if (elements.plannerChatSend) {
+            elements.plannerChatSend.disabled = sending;
+            elements.plannerChatSend.textContent = sending ? '傳送中' : '送出';
+        }
+        if (elements.plannerChatInput) {
+            elements.plannerChatInput.disabled = sending;
+        }
+    }
+
+    async function sendPlannerChatMessage(text) {
+        state.plannerChat.sending = true;
+        state.plannerChat.messages.push({ role: 'user', content: text });
+        updatePlannerChatSendState();
+        renderPlannerChat();
+
+        try {
+            const response = await (window.authFetch || fetch)((window.API_BASE_URL || '') + '/api/planner-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    // 最後一則是剛送出的訊息，另外以 message 欄位傳遞，這裡不重複帶入
+                    history: state.plannerChat.messages
+                        .slice(-PLANNER_CHAT_MAX_HISTORY - 1, -1)
+                        .map(({ role, content }) => ({ role, content })),
+                    planner: buildPlannerChatContext()
+                })
+            });
+
+            const payload = await safeParseJSON(response);
+            if (!response.ok) {
+                throw new Error(payload?.error || '課表助理暫時無法回覆，請稍後再試。');
+            }
+
+            state.plannerChat.messages.push({
+                role: 'assistant',
+                content: payload?.reply || '（沒有收到回覆內容）',
+                actions: Array.isArray(payload?.actions)
+                    ? payload.actions.map((action) => ({ ...action, status: 'pending' }))
+                    : []
+            });
+        } catch (error) {
+            console.error('planner chat failed:', error);
+            state.plannerChat.messages.push({
+                role: 'assistant',
+                content: error.message || '課表助理暫時無法回覆，請稍後再試。',
+                error: true
+            });
+        } finally {
+            state.plannerChat.sending = false;
+            updatePlannerChatSendState();
+            renderPlannerChat();
+        }
+    }
+
+    function buildPlannerChatContext() {
+        const selectedIds = new Set(state.planner.selected.keys());
+        const candidates = state.planner.pool
+            .filter((course) => !selectedIds.has(course.id))
+            .sort((a, b) => comparePlannerCourses(b, a))
+            .slice(0, PLANNER_CHAT_MAX_CANDIDATES)
+            .map(toPlannerChatCourse);
+
+        return {
+            targetCredits: state.planner.targetCredits,
+            userContext: elements.userContext?.value?.trim() || '',
+            selected: Array.from(state.planner.selected.values()).map(toPlannerChatCourse),
+            candidates
+        };
+    }
+
+    // 只送出助理需要的欄位，不把整包課程資料丟給 AI
+    function toPlannerChatCourse(course) {
+        return {
+            id: course.id,
+            course: course.course,
+            teacher: course.teacher || '',
+            credits: Number.isFinite(course.credits) ? course.credits : null,
+            timeSlots: Array.isArray(course.timeSlots) ? course.timeSlots : [],
+            required: Boolean(course.required),
+            pinned: Boolean(course.pinned)
+        };
+    }
+
+    function renderPlannerChat() {
+        const container = elements.plannerChatMessages;
+        if (!container) return;
+        container.innerHTML = '';
+
+        state.plannerChat.messages.forEach((message, index) => {
+            container.appendChild(createPlannerChatBubble(message, index));
+        });
+
+        if (state.plannerChat.sending) {
+            const typing = document.createElement('p');
+            typing.className = 'self-start text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+            typing.textContent = '助理思考中…';
+            container.appendChild(typing);
+        }
+
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function createPlannerChatBubble(message, messageIndex) {
+        const isUser = message.role === 'user';
+        const wrap = document.createElement('div');
+        wrap.className = `flex flex-col gap-2 max-w-[85%] ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
+
+        const bubble = document.createElement('p');
+        bubble.className = isUser
+            ? 'px-3 py-2 rounded-lg text-sm bg-notion-accent text-white whitespace-pre-wrap break-words'
+            : `px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words ${
+                message.error
+                    ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300'
+                    : 'bg-notion-bg-secondary dark:bg-dark-bg-secondary'
+              }`;
+        bubble.textContent = message.content;
+        wrap.appendChild(bubble);
+
+        (message.actions || []).forEach((action, actionIndex) => {
+            wrap.appendChild(createPlannerChatActionCard(action, messageIndex, actionIndex));
+        });
+
+        return wrap;
+    }
+
+    function createPlannerChatActionCard(action, messageIndex, actionIndex) {
+        const card = document.createElement('div');
+        card.className = 'w-full rounded-md border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card p-2.5 flex flex-col gap-2';
+        const verb = action.type === 'remove' ? '移除' : '加入';
+
+        const label = document.createElement('p');
+        label.className = 'text-xs leading-relaxed';
+        const slots = Array.isArray(action.timeSlots) && action.timeSlots.length
+            ? action.timeSlots.join(', ')
+            : '節次未提供';
+        const credits = Number.isFinite(action.credits) ? `${action.credits} 學分` : '學分未提供';
+        label.textContent = `建議${verb}：${action.courseName}（${credits}｜${slots}）` +
+            (action.reason ? `　理由：${action.reason}` : '');
+        card.appendChild(label);
+
+        if (action.status !== 'pending') {
+            const done = document.createElement('p');
+            done.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+            done.textContent = action.status === 'applied' ? `已${verb}` : '已略過';
+            card.appendChild(done);
+            return card;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2';
+
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'px-2.5 py-1 rounded-md text-xs font-medium bg-notion-accent text-white hover:opacity-90 transition-opacity';
+        confirm.textContent = '確認';
+        confirm.addEventListener('click', () => applyPlannerChatAction(messageIndex, actionIndex));
+
+        const skip = document.createElement('button');
+        skip.type = 'button';
+        skip.className = 'px-2.5 py-1 rounded-md text-xs font-medium bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
+        skip.textContent = '略過';
+        skip.addEventListener('click', () => {
+            action.status = 'dismissed';
+            renderPlannerChat();
+        });
+
+        row.append(confirm, skip);
+        card.appendChild(row);
+        return card;
+    }
+
+    function applyPlannerChatAction(messageIndex, actionIndex) {
+        const action = state.plannerChat.messages[messageIndex]?.actions?.[actionIndex];
+        if (!action || action.status !== 'pending') return;
+
+        const before = state.planner.selected.size;
+        if (action.type === 'remove') {
+            plannerRemoveCourse(action.courseId);
+        } else {
+            plannerAddCourse(action.courseId);
+        }
+
+        // plannerAddCourse／plannerRemoveCourse 本身會擋下衝堂與固定課程並跳出提示；
+        // 課表沒有實際變動時維持待確認狀態，讓使用者知道這次沒有套用成功。
+        if (state.planner.selected.size !== before) {
+            action.status = 'applied';
+        }
+        renderPlannerChat();
     }
 
     function createPlannerCourseCard(course, options = {}) {
