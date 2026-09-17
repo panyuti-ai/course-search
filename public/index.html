@@ -400,6 +400,25 @@
         </svg>
     </button>
 
+    <!-- 課表助理導覽：首次產生課表後，暗化背景並聚焦右下角的助理入口 -->
+    <div id="planner-chat-coach" class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-[1px]">
+        <div id="planner-chat-coach-card"
+            class="absolute bottom-44 right-6 w-[min(20rem,calc(100vw-3rem))] bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border rounded-xl shadow-xl p-4 flex flex-col gap-2"
+            role="dialog" aria-modal="true" aria-labelledby="planner-chat-coach-title">
+            <h4 id="planner-chat-coach-title" class="text-sm font-semibold">課表排好了</h4>
+            <p class="text-xs leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary">
+                右下角這顆按鈕是課表助理。可以直接跟它說「幫我拿掉星期五的課」，
+                或是問「為什麼推薦這門課」，它會依照排課的實際依據回答。
+            </p>
+            <div class="flex items-center gap-2 mt-1">
+                <button type="button" id="planner-chat-coach-ok"
+                    class="flex-1 py-1.5 rounded-md text-xs font-medium bg-notion-accent text-white hover:opacity-90 transition-opacity">知道了</button>
+                <button type="button" id="planner-chat-coach-never"
+                    class="flex-1 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-dark-card border border-notion-border dark:border-dark-border text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors">不用再提醒我</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 產生課表後浮出的提示，點擊可直接開啟助理 -->
     <button id="planner-chat-hint" type="button"
         class="fixed bottom-32 right-[4.25rem] z-30 hidden h-9 items-center max-w-[min(15rem,calc(100vw-7rem))] px-3 rounded-md bg-notion-accent text-white text-xs font-medium shadow-md hover:opacity-90 transition-opacity whitespace-nowrap overflow-hidden text-ellipsis">

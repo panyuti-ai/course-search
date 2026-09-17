@@ -202,6 +202,9 @@
         plannerChatInput: document.getElementById('planner-chat-input'),
         plannerChatSend: document.getElementById('planner-chat-send'),
         plannerChatHint: document.getElementById('planner-chat-hint'),
+        plannerChatCoach: document.getElementById('planner-chat-coach'),
+        plannerChatCoachOk: document.getElementById('planner-chat-coach-ok'),
+        plannerChatCoachNever: document.getElementById('planner-chat-coach-never'),
     };
     const plannerAddButtonUpdaters = new Set();
     let plannerUpdatedListenerBound = false;
@@ -3840,6 +3843,71 @@
         '你的課表排好了。想調整的話直接說，例如「幫我拿掉星期五的課」、' +
         '「有沒有比較輕鬆的課可以換」，或是問我為什麼會推薦某一門課。';
 
+    const PLANNER_CHAT_COACH_KEY = 'planner_chat_coach_dismissed';
+    const PLANNER_CHAT_COACH_DELAY = 800;  // 先讓使用者看到課表，再介紹助理
+
+    // localStorage 在無痕模式或停用 cookie 時會丟例外，讀寫都要能失敗
+    function isPlannerChatCoachDismissed() {
+        try {
+            return localStorage.getItem(PLANNER_CHAT_COACH_KEY) === '1';
+        } catch {
+            return false;
+        }
+    }
+
+    function dismissPlannerChatCoachForever() {
+        try {
+            localStorage.setItem(PLANNER_CHAT_COACH_KEY, '1');
+        } catch {
+            // 存不起來就只是下次還會出現，不影響當次操作
+        }
+    }
+
+    let plannerChatCoachTimer = null;
+
+    function showPlannerChatCoach() {
+        const coach = elements.plannerChatCoach;
+        const btn = elements.plannerChatBtn;
+        if (!coach || !btn || btn.classList.contains('hidden') || state.plannerChat.open) return;
+
+        coach.classList.remove('hidden', 'planner-coach-out');
+        coach.classList.add('planner-coach-in');
+        // 讓入口浮在遮罩之上，形成聚光燈效果
+        btn.style.zIndex = '45';
+        elements.plannerChatCoachOk?.focus();
+    }
+
+    function hidePlannerChatCoach(forever = false) {
+        const coach = elements.plannerChatCoach;
+        clearTimeout(plannerChatCoachTimer);
+        if (forever) dismissPlannerChatCoachForever();
+        if (!coach || coach.classList.contains('hidden')) return;
+
+        coach.classList.remove('planner-coach-in');
+        coach.classList.add('planner-coach-out');
+        plannerChatCoachTimer = setTimeout(() => {
+            coach.classList.add('hidden');
+            coach.classList.remove('planner-coach-out');
+            if (elements.plannerChatBtn) elements.plannerChatBtn.style.zIndex = '';
+        }, 250);
+    }
+
+    function initPlannerChatCoach() {
+        const coach = elements.plannerChatCoach;
+        if (!coach) return;
+        // 點遮罩空白處等同「知道了」：使用者隨時可以脫身
+        coach.addEventListener('click', (event) => {
+            if (event.target === coach) hidePlannerChatCoach(false);
+        });
+        elements.plannerChatCoachOk?.addEventListener('click', () => hidePlannerChatCoach(false));
+        elements.plannerChatCoachNever?.addEventListener('click', () => hidePlannerChatCoach(true));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !coach.classList.contains('hidden')) {
+                hidePlannerChatCoach(false);
+            }
+        });
+    }
+
     const PLANNER_CHAT_HINT_MS = 5000;   // 提示停留時間
     let plannerChatHintTimer = null;
 
@@ -3854,8 +3922,17 @@
         void btn.offsetWidth;
         btn.classList.add('planner-chat-pop');
 
+        if (state.plannerChat.open) return;
+
+        // 還沒關閉過導覽 → 先讓課表露臉一下，再暗化背景介紹助理
+        if (!isPlannerChatCoachDismissed()) {
+            clearTimeout(plannerChatCoachTimer);
+            plannerChatCoachTimer = setTimeout(showPlannerChatCoach, PLANNER_CHAT_COACH_DELAY);
+            return;
+        }
+
         const hint = elements.plannerChatHint;
-        if (!hint || state.plannerChat.open) return;
+        if (!hint) return;
         clearTimeout(plannerChatHintTimer);
         hint.classList.remove('hidden', 'planner-chat-hint-out');
         hint.classList.add('flex', 'planner-chat-hint-in');
@@ -3882,6 +3959,7 @@
         btn.addEventListener('click', () => togglePlannerChat(!state.plannerChat.open));
         elements.plannerChatClose?.addEventListener('click', () => togglePlannerChat(false));
         elements.plannerChatHint?.addEventListener('click', () => togglePlannerChat(true));
+        initPlannerChatCoach();
         form.addEventListener('submit', (event) => {
             event.preventDefault();
             const input = elements.plannerChatInput;
@@ -3897,6 +3975,7 @@
         if (!panel) return;
         state.plannerChat.open = Boolean(open);
         hidePlannerChatHint();
+        hidePlannerChatCoach(false);
         if (state.plannerChat.open) {
             panel.classList.remove('hidden');
             panel.classList.add('flex');
@@ -3921,6 +4000,7 @@
         btn.classList.toggle('hidden', !hasPlan);
         if (!hasPlan) {
             hidePlannerChatHint();
+            hidePlannerChatCoach(false);
             if (state.plannerChat.open) togglePlannerChat(false);
         }
     }
