@@ -2803,10 +2803,14 @@
         }
 
         const profileTokens = buildPlannerProfileTokens();
-        pool = pool.map((course) => ({
-            ...course,
-            relevance: computePlannerRelevance(course, profileTokens, aiKeywords)
-        }));
+        pool = pool.map((course) => {
+            const detail = computePlannerRelevanceDetail(course, profileTokens, aiKeywords);
+            return {
+                ...course,
+                relevance: detail.score,
+                relevanceHits: detail.hits
+            };
+        });
 
         return { pool, warnings };
     }
@@ -2965,7 +2969,8 @@
         const selectedSlotsByDay = {};
         const labConflictWarnings = [];
 
-        function addCourseToSelected(course) {
+        function addCourseToSelected(course, reason = { type: 'auto' }) {
+            course.selectReason = reason;
             selected.set(course.id, course);
             if (course.course) selectedCourseNames.add(course.course);
             const courseCredits = Number.isFinite(course.credits) ? course.credits : 0;
@@ -2983,7 +2988,7 @@
             if (!course.pinned) continue;
             if (selected.has(course.id)) continue;
             if (course.course && selectedCourseNames.has(course.course)) continue;
-            currentCredits += addCourseToSelected(course);
+            currentCredits += addCourseToSelected(course, { type: 'pinned' });
         }
 
         for (const course of allSorted) {
@@ -3015,7 +3020,7 @@
                     if (hasPlannerConflictWithSelected(labCourse, selected)) {
                         labConflictWarnings.push(`「${course.course}」的實習課「${labCourse.course}」與其他課程衝堂，未自動加入。`);
                     } else {
-                        currentCredits += addCourseToSelected(labCourse);
+                        currentCredits += addCourseToSelected(labCourse, { type: 'lab', baseCourse: course.course });
                     }
                 }
             } else if (currentCredits + courseCredits <= hardCap) {
@@ -3046,6 +3051,7 @@
             showToast(t('conflict-planner'), 'error');
             return;
         }
+        course.selectReason = { type: 'manual' };
         state.planner.selected.set(course.id, course);
         renderPlanner();
     }
@@ -3058,6 +3064,7 @@
             return;
         }
         state.planner.selected.delete(courseId);
+        delete course.selectReason;
         // fromCard entry 移除後也從 pool 清掉，不出現在候選清單
         if (course.fromCard) {
             state.planner.pool = state.planner.pool.filter((c) => c.id !== courseId);
@@ -3784,6 +3791,14 @@
         info.textContent = `${pinnedLabel}｜${course.credits} 學分｜關聯分數 ${relevanceLabel}｜${timeLabel}`;
         card.appendChild(info);
 
+        const reasonText = buildPlannerReasonText(course);
+        if (reasonText) {
+            const reason = document.createElement('p');
+            reason.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary leading-relaxed border-l-2 border-notion-border dark:border-dark-border pl-2';
+            reason.textContent = `推薦原因：${reasonText}`;
+            card.appendChild(reason);
+        }
+
         return card;
     }
 
@@ -4069,6 +4084,12 @@
     }
 
     function computePlannerRelevance(course, profileTokens, aiKeywords = []) {
+        return computePlannerRelevanceDetail(course, profileTokens, aiKeywords).score;
+    }
+
+    // 與 computePlannerRelevance 同一套計分，另外記錄每一筆加分的來源，
+    // 供課程卡片顯示「為什麼推薦這門課」。
+    function computePlannerRelevanceDetail(course, profileTokens, aiKeywords = []) {
         const courseName = (course.course || '').toLowerCase();
         const corpus = [
             course.course,
@@ -4082,6 +4103,7 @@
             .toLowerCase();
 
         let score = 0;
+        const hits = [];
 
         // AI 關鍵字評分（主要評分來源）
         aiKeywords.forEach(({ term, weight }) => {
@@ -4089,10 +4111,13 @@
             const t = term.toLowerCase();
             if (courseName === t) {
                 score += weight * 3;       // 課名完全相符：最高分
+                hits.push({ type: 'keyword', match: 'exact', term, points: weight * 3 });
             } else if (courseName.includes(t) || t.includes(courseName)) {
                 score += weight * 2;       // 課名部分相符
+                hits.push({ type: 'keyword', match: 'partial', term, points: weight * 2 });
             } else if (corpus.includes(t)) {
                 score += weight * 0.5;     // 只在 corpus 裡出現
+                hits.push({ type: 'keyword', match: 'corpus', term, points: weight * 0.5 });
             }
         });
 
@@ -4101,24 +4126,89 @@
             profileTokens.forEach((token) => {
                 if (!token || token.length < 2) return;
                 if (courseName.includes(token)) {
-                    score += token.length >= 3 ? 5 : 2;
+                    const points = token.length >= 3 ? 5 : 2;
+                    score += points;
+                    hits.push({ type: 'token', match: 'name', term: token, points });
                 } else if (corpus.includes(token)) {
-                    score += token.length >= 3 ? 2 : 1;
+                    const points = token.length >= 3 ? 2 : 1;
+                    score += points;
+                    hits.push({ type: 'token', match: 'corpus', term: token, points });
                 }
             });
         }
 
         if (Number.isFinite(course.score)) {
-            score += Math.max(0, Math.min(course.score, 100)) / 25;
+            const points = Math.max(0, Math.min(course.score, 100)) / 25;
+            score += points;
+            hits.push({ type: 'rating', value: course.score, points });
         }
         if (Number.isFinite(course.difficulty)) {
-            score += Math.max(0, 5 - course.difficulty) * 0.2;
+            const points = Math.max(0, 5 - course.difficulty) * 0.2;
+            score += points;
+            hits.push({ type: 'difficulty', value: course.difficulty, points });
         }
         if (course.required) {
             score += 10000;
+            hits.push({ type: 'required', points: 10000 });
         }
 
-        return Number(score.toFixed(2));
+        return { score: Number(score.toFixed(2)), hits };
+    }
+
+    // 把計分明細與選入方式翻成一句人看得懂的推薦原因。
+    // 沒有任何可講的理由時回傳空字串，卡片就不顯示這一行。
+    function buildPlannerReasonText(course) {
+        const reasons = [];
+        const hits = Array.isArray(course.relevanceHits) ? course.relevanceHits : [];
+        const selectReason = course.selectReason;
+
+        // 1. 先講這門課是怎麼進到課表的
+        if (selectReason?.type === 'pinned') {
+            reasons.push('你上傳的課表已有這門課，固定保留');
+        } else if (selectReason?.type === 'lab') {
+            reasons.push(selectReason.baseCourse
+                ? `「${selectReason.baseCourse}」的配套實習課，一起排入`
+                : '主課程的配套實習課，一起排入');
+        } else if (selectReason?.type === 'manual') {
+            reasons.push('你自己加入的課');
+        }
+
+        if (hits.some((hit) => hit.type === 'required')) {
+            reasons.push('系上必修');
+        }
+
+        // 2. 命中了背景說明的哪些關鍵字（分數高的優先，最多 3 個）
+        const keywordHits = hits
+            .filter((hit) => hit.type === 'keyword' || hit.type === 'token')
+            .sort((a, b) => b.points - a.points);
+        const nameTerms = [];
+        const corpusTerms = [];
+        keywordHits.forEach((hit) => {
+            const bucket = hit.match === 'corpus' ? corpusTerms : nameTerms;
+            if (!bucket.includes(hit.term)) bucket.push(hit.term);
+        });
+        if (nameTerms.length) {
+            reasons.push(`課名命中你想修的${formatPlannerTerms(nameTerms.slice(0, 3))}`);
+        } else if (corpusTerms.length) {
+            reasons.push(`課程資料提到${formatPlannerTerms(corpusTerms.slice(0, 3))}`);
+        }
+
+        // 3. 評分與難度（只有在真的是加分項時才講）
+        const ratingHit = hits.find((hit) => hit.type === 'rating');
+        if (ratingHit && ratingHit.points > 0) {
+            reasons.push(`課程評分 ${stringifyScore(ratingHit.value)}`);
+        }
+        const difficultyHit = hits.find((hit) => hit.type === 'difficulty');
+        if (difficultyHit && difficultyHit.value <= 3) {
+            const level = difficultyHit.value <= 2 ? '負擔較輕' : '難度中等';
+            reasons.push(`難度 ${stringifyScore(difficultyHit.value)}／5，${level}`);
+        }
+
+        return reasons.slice(0, 4).join('・');
+    }
+
+    function formatPlannerTerms(terms) {
+        return terms.map((term) => `「${term}」`).join('');
     }
 
     function comparePlannerCourses(a, b) {
