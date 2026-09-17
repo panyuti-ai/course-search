@@ -3115,21 +3115,43 @@
         renderPlanner();
     }
 
+    function findPlannerCourse(courseId) {
+        return state.planner.selected.get(courseId)
+            || state.planner.pool.find((item) => item.id === courseId)
+            || null;
+    }
+
+    function setPlannerCoursePinned(courseName, pinned) {
+        state.planner.pool.forEach((item) => {
+            if (item.course === courseName) item.pinned = pinned;
+        });
+        state.planner.selected.forEach((item) => {
+            if (item.course === courseName) item.pinned = pinned;
+        });
+    }
+
+    // 恢復固定：使用者按錯或改變主意時，把課程改回不可移除
+    function plannerRepinCourse(courseId) {
+        const course = findPlannerCourse(courseId);
+        if (!course || course.pinned) return;
+
+        state.planner.unpinnedCourses.delete(course.course);
+        setPlannerCoursePinned(course.course, true);
+        showToast(t('planner-repinned', { name: course.course }), 'success');
+        renderPlanner();
+    }
+
     // 解除固定：課程仍留在課表上，但之後可以移除。
     // 不會立刻重排，使用者可自行移除後再加課，或重新產生課表。
     function plannerUnpinCourse(courseId) {
-        const course = state.planner.selected.get(courseId)
-            || state.planner.pool.find((item) => item.id === courseId);
+        const course = findPlannerCourse(courseId);
         if (!course || !course.pinned) return;
 
+        // 解除之後就可能被移除，先讓使用者確認
+        if (!confirm(t('planner-unpin-confirm', { name: course.course }))) return;
+
         state.planner.unpinnedCourses.add(course.course);
-        // pool 與 selected 共用同一個物件，改一次即可
-        state.planner.pool.forEach((item) => {
-            if (item.course === course.course) item.pinned = false;
-        });
-        state.planner.selected.forEach((item) => {
-            if (item.course === course.course) item.pinned = false;
-        });
+        setPlannerCoursePinned(course.course, false);
         showToast(t('planner-unpinned', { name: course.course }), 'success');
         renderPlanner();
     }
@@ -3236,13 +3258,18 @@
         } else {
             const fragment = document.createDocumentFragment();
             selectedList.forEach((course) => {
+                // 已解除固定的上傳課程額外提供「恢復固定」，避免誤按後無法回復
+                const isUnpinned = !course.pinned && state.planner.unpinnedCourses.has(course.course);
                 const card = createPlannerCourseCard(course, {
                     actionLabel: course.pinned ? t('planner-unpin') : t('planner-remove'),
                     onAction: course.pinned
                         ? () => plannerUnpinCourse(course.id)
                         : () => plannerRemoveCourse(course.id),
                     actionDisabled: false,
-                    actionTitle: course.pinned ? t('planner-unpin-hint') : ''
+                    actionTitle: course.pinned ? t('planner-unpin-hint') : '',
+                    secondaryLabel: isUnpinned ? t('planner-repin') : '',
+                    secondaryTitle: isUnpinned ? t('planner-repin-hint') : '',
+                    onSecondary: isUnpinned ? () => plannerRepinCourse(course.id) : null
                 });
                 fragment.appendChild(card);
             });
@@ -4315,7 +4342,21 @@
             actionButton.addEventListener('click', options.onAction);
         }
 
-        topRow.append(titleWrap, actionButton);
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-1.5 shrink-0';
+        // 次要動作放在主要動作左側，例如已解除固定的課程可以改回固定
+        if (options.secondaryLabel && typeof options.onSecondary === 'function') {
+            const secondary = document.createElement('button');
+            secondary.type = 'button';
+            secondary.className = 'px-2.5 py-1 rounded-md text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary border border-dashed border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors duration-100';
+            secondary.textContent = options.secondaryLabel;
+            if (options.secondaryTitle) secondary.title = options.secondaryTitle;
+            secondary.addEventListener('click', options.onSecondary);
+            actions.appendChild(secondary);
+        }
+        actions.appendChild(actionButton);
+
+        topRow.append(titleWrap, actions);
         card.appendChild(topRow);
 
         const info = document.createElement('p');
