@@ -3896,7 +3896,9 @@
         };
     }
 
-    // 只送出助理需要的欄位，不把整包課程資料丟給 AI
+    // 只送出助理需要的欄位，不把整包課程資料丟給 AI。
+    // 難度、評分與推薦原因是助理回答「為什麼推薦這門」、
+    // 「哪一門比較輕鬆」的依據，缺少時它只能憑課名臆測。
     function toPlannerChatCourse(course) {
         return {
             id: course.id,
@@ -3905,7 +3907,10 @@
             credits: Number.isFinite(course.credits) ? course.credits : null,
             timeSlots: Array.isArray(course.timeSlots) ? course.timeSlots : [],
             required: Boolean(course.required),
-            pinned: Boolean(course.pinned)
+            pinned: Boolean(course.pinned),
+            difficulty: Number.isFinite(course.difficulty) ? course.difficulty : null,
+            score: Number.isFinite(course.score) ? course.score : null,
+            reason: buildPlannerReasonText(course)
         };
     }
 

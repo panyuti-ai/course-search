@@ -481,7 +481,10 @@ function formatChatCourseLines(courses, prefix) {
       const teacher = course.teacher ? `｜${course.teacher}` : "";
       const pinned = course.pinned ? "｜已上傳課表（不可移除）" : "";
       const required = course.required ? "｜必修" : "";
-      return `[${prefix}${index + 1}] ${course.course}${teacher}｜${credits} 學分｜${slots}${required}${pinned}`;
+      const difficulty = Number.isFinite(course.difficulty) ? `｜難度 ${course.difficulty}/5` : "";
+      const score = Number.isFinite(course.score) ? `｜評分 ${course.score}` : "";
+      const reason = course.reason ? `\n      推薦原因：${course.reason}` : "";
+      return `[${prefix}${index + 1}] ${course.course}${teacher}｜${credits} 學分｜${slots}${required}${pinned}${difficulty}${score}${reason}`;
     })
     .join("\n");
 }
@@ -497,11 +500,18 @@ function normalizeChatCourses(list, limit) {
       course: item.course.trim().slice(0, 80),
       teacher: typeof item.teacher === "string" ? item.teacher.trim().slice(0, 40) : "",
       credits: Number.isFinite(item.credits) ? item.credits : null,
+      // 逐一截斷節次字串：僅限制陣列長度時，單一字串仍可大到把 prompt 撐爆
       timeSlots: Array.isArray(item.timeSlots)
-        ? item.timeSlots.filter((slot) => typeof slot === "string").slice(0, 12)
+        ? item.timeSlots
+            .filter((slot) => typeof slot === "string")
+            .slice(0, 12)
+            .map((slot) => slot.trim().slice(0, 20))
         : [],
       required: Boolean(item.required),
       pinned: Boolean(item.pinned),
+      difficulty: Number.isFinite(item.difficulty) ? item.difficulty : null,
+      score: Number.isFinite(item.score) ? item.score : null,
+      reason: typeof item.reason === "string" ? item.reason.trim().slice(0, 150) : "",
     }));
 }
 
@@ -585,7 +595,10 @@ ${historyText ? `先前的對話：\n${historyText}\n` : ""}
 3. 標示「已上傳課表（不可移除）」的課程**不可以**建議移除。
 4. 單次最多建議 ${CHAT_MAX_ACTIONS} 項調整；若學生只是提問，actions 請留空陣列。
 5. 若學生的要求無法達成（例如候選清單裡沒有符合的課），請在 reply 中說明原因，不要硬湊。
-6. reply 用繁體中文，2-4 句，直接說明你做了什麼判斷，不要客套。
+6. 清單中的「推薦原因」是排課演算法實際的計分依據，「難度」與「評分」來自課程資料；
+   學生問「為什麼推薦這門」或「哪一門比較輕鬆」時，請依據這些資訊回答，不要自行臆測。
+   課程沒有附上難度或評分時，請直接說明該課缺少這項資料。
+7. reply 用繁體中文，2-4 句，直接說明你做了什麼判斷，不要客套。
 
 只回傳 JSON，格式如下：
 {"reply": "說明文字", "actions": [{"type": "remove", "ref": "S2", "reason": "星期五的課"}]}
