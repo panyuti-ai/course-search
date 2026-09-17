@@ -148,7 +148,8 @@
             warnings: [],
             studentGrade: null,
             shuffleSeed: 0,
-            candidateExpanded: { bg: false, other: false }
+            candidateExpanded: { bg: false, other: false },
+            unpinnedCourses: new Set()
         },
         plannerChat: {
             open: false,
@@ -1645,6 +1646,7 @@
             // Enrich parsed courses with credits from fcu_courses catalog
             const enriched = parsed.courses.map((c) => enrichPlannerCourseCredits(c));
             state.planner.uploadedCourses = enriched;
+            state.planner.unpinnedCourses = new Set();   // 換了課表，先前的解除紀錄不再適用
             state.planner.hasPlan = false;
             state.planner.pool = [];
             state.planner.selected = new Map();
@@ -2769,7 +2771,10 @@
         const sourceDifficulty = toPlannerNumber(item.difficulty);
         const credits = toPlannerNumber(item.credits ?? item.credit ?? item['學分']) ?? inferPlannerCredits(tags);
         const sourceKey = toPlannerString(item.source) || 'uploaded';
-        const pinned = sourceKey === 'uploaded' || sourceKey.startsWith('uploaded_');
+        // 系辦預排的必修不該被動到，但學生自己加選、一併印進 PDF 的課應該可以退。
+        // 課表 PDF 上分不出兩者，因此由使用者自行解除固定。
+        const isUploaded = sourceKey === 'uploaded' || sourceKey.startsWith('uploaded_');
+        const pinned = isUploaded && !state.planner.unpinnedCourses.has(courseName);
 
         return {
             id: createPlannerId(item, index),
@@ -3099,6 +3104,25 @@
         renderPlanner();
     }
 
+    // 解除固定：課程仍留在課表上，但之後可以移除。
+    // 不會立刻重排，使用者可自行移除後再加課，或重新產生課表。
+    function plannerUnpinCourse(courseId) {
+        const course = state.planner.selected.get(courseId)
+            || state.planner.pool.find((item) => item.id === courseId);
+        if (!course || !course.pinned) return;
+
+        state.planner.unpinnedCourses.add(course.course);
+        // pool 與 selected 共用同一個物件，改一次即可
+        state.planner.pool.forEach((item) => {
+            if (item.course === course.course) item.pinned = false;
+        });
+        state.planner.selected.forEach((item) => {
+            if (item.course === course.course) item.pinned = false;
+        });
+        showToast(`「${course.course}」已解除固定，現在可以移除了。`, 'success');
+        renderPlanner();
+    }
+
     function plannerRemoveCourse(courseId) {
         const course = state.planner.selected.get(courseId);
         if (!course) return;
@@ -3191,10 +3215,14 @@
             const fragment = document.createDocumentFragment();
             selectedList.forEach((course) => {
                 const card = createPlannerCourseCard(course, {
-                    actionLabel: t('planner-remove'),
-                    onAction: () => plannerRemoveCourse(course.id),
-                    actionDisabled: course.pinned,
-                    actionTitle: course.pinned ? t('planner-pinned-no-remove') : ''
+                    actionLabel: course.pinned ? '解除固定' : t('planner-remove'),
+                    onAction: course.pinned
+                        ? () => plannerUnpinCourse(course.id)
+                        : () => plannerRemoveCourse(course.id),
+                    actionDisabled: false,
+                    actionTitle: course.pinned
+                        ? '這門課來自上傳的課表。若是你自己加選的，可以解除固定後移除。'
+                        : ''
                 });
                 fragment.appendChild(card);
             });
