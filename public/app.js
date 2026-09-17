@@ -3277,17 +3277,27 @@
             container.appendChild(frag);
 
             const remaining = Math.min(list.length, CANDIDATE_EXPANDED_LIMIT) - shown;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'w-full mt-1 py-1.5 rounded-md text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary border border-dashed border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors';
+
             if (remaining > 0) {
-                const more = document.createElement('button');
-                more.type = 'button';
-                more.className = 'w-full mt-1 py-1.5 rounded-md text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary border border-dashed border-notion-border dark:border-dark-border hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors';
-                more.textContent = `還有 ${remaining} 門，顯示更多`;
-                more.addEventListener('click', () => {
+                toggle.textContent = `還有 ${remaining} 門，顯示更多`;
+                toggle.addEventListener('click', () => {
                     state.planner.candidateExpanded[sectionKey] = true;
                     renderPlanner();
                 });
-                container.appendChild(more);
+            } else if (expanded && list.length > limit) {
+                // 展開後要能收回去，否則只能重新產生課表才收得起來
+                toggle.textContent = '收合';
+                toggle.addEventListener('click', () => {
+                    state.planner.candidateExpanded[sectionKey] = false;
+                    renderPlanner();
+                });
+            } else {
+                return;
             }
+            container.appendChild(toggle);
         }
 
         // 候選清單預設顯示的門數跟著目前課表走，讓左右兩欄高度相近；
