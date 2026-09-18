@@ -145,6 +145,10 @@
             uploadedCourses: [],
             targetCredits: 18,
             hasPlan: false,
+            // 上傳課表時產生的警告（例如查不到學分）與排課過程的警告分開存放：
+            // 排課時會整批覆寫 warnings，若共用同一個陣列，使用者一按下產生課表
+            // 就再也看不到上傳時的提醒，但那門課仍以 0 學分計入。
+            uploadWarnings: [],
             warnings: [],
             studentGrade: null,
             shuffleSeed: 0,
@@ -1725,7 +1729,7 @@
             // 沒印），但我們接著會去課程目錄查。若沿用 AI 當下的說法，畫面會一邊說
             // 「無法辨識學分」一邊顯示查到的學分，自相矛盾。
             // AI 提到學分或必選修的警告一律捨棄——這兩項由系統查證，不該由 AI 論斷。
-            state.planner.warnings = buildPlannerUploadWarnings(enriched, parsed.warnings);
+            state.planner.uploadWarnings = buildPlannerUploadWarnings(enriched, parsed.warnings);
             state.planner.studentGrade = parsed.studentGrade ?? null;
 
             updatePlannerUploadedSummary();
@@ -1735,7 +1739,7 @@
             renderPlanner();
 
             // 用回填後自行產生的警告，而非 AI 的原話（見上方 buildPlannerUploadWarnings）
-            const warnings = state.planner.warnings;
+            const warnings = state.planner.uploadWarnings;
             if (warnings.length) {
                 showToast(t('pdf-parsed-warn', { file: file.name, n: parsed.courses.length, warn: warnings[0] }), 'success');
             } else {
@@ -1744,6 +1748,7 @@
         } catch (error) {
             console.error('Failed to read planner file:', error);
             state.planner.uploadedCourses = [];
+            state.planner.uploadWarnings = [];
             if (fileNameEl) fileNameEl.textContent = t('no-file-selected');
             if (uploadedCreditsEl) uploadedCreditsEl.classList.add('hidden');
             showToast(error.message || t('pdf-read-failed'), 'error');
@@ -3320,7 +3325,8 @@
         summary.classList.remove('hidden');
 
         if (!state.planner.hasPlan) {
-            const warningText = state.planner.warnings.length ? `（${state.planner.warnings.join(' ')}）` : '';
+            const allWarnings = [...state.planner.uploadWarnings, ...state.planner.warnings].filter(Boolean);
+            const warningText = allWarnings.length ? `（${allWarnings.join(' ')}）` : '';
             summary.textContent = `${t('planner-no-plan')}${warningText}`;
             selectedContainer.appendChild(createPlannerEmptyState(t('planner-empty-selected')));
             candidateContainer.appendChild(createPlannerEmptyState(t('planner-empty-candidate')));
@@ -3338,7 +3344,7 @@
         const missingCredits = Math.max(targetCredits - selectedCredits, 0);
         const unknownTimeCount = selectedList.filter((course) => !course.timeSlots.length).length;
 
-        const warnings = state.planner.warnings.filter(Boolean);
+        const warnings = [...state.planner.uploadWarnings, ...state.planner.warnings].filter(Boolean);
         const warningText = warnings.length ? `。${warnings.join(' ')}` : '';
         const unknownTimeText = '';
         summary.textContent =
