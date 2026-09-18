@@ -277,11 +277,14 @@
             return null;
         }
 
-        // Load both data sources in parallel; fcu_courses.json is optional
-        const [rawCourses, rawFcu] = await Promise.all([
+        // Load all data sources in parallel; only courses.json is required
+        const [rawCourses, rawFcu, rawReviews] = await Promise.all([
             fetchJson('courses.json'),
             fetchJson('fcu_courses.json').catch(() => null),
+            fetchJson('course_reviews.json').catch(() => null),
         ]);
+
+        buildReviewIndex(rawReviews);
 
         if (!rawCourses) throw lastError;
 
@@ -318,6 +321,82 @@
             state.coursesById.set(normalized.id, normalized);
             return normalized;
         });
+    }
+
+    // ── 學生心得 ────────────────────────────────────────────────
+    // 這批心得是從網路蒐集來的，課程與教師的歸屬不保證正確，因此顯示時必須
+    // 說清楚我們實際知道什麼：課名與教師都對得上，才敢說是「這門課這位老師」
+    // 的心得；只有課名對得上時，明說是同名課程、教師不同。
+    //
+    // 原始資料另有「結論」欄位（「口碑很好，強烈推薦修課」之類的斷言），刻意
+    // 不顯示：4086 筆裡有 54% 是「評價褒貶不一」等於沒講，而其餘的確定語氣
+    // 正是最容易誤導選課判斷的部分。改為呈現學生自己講的原文摘要。
+    const reviewIndex = new Map();
+
+    // 原始摘要夾雜兩種機器產生的句子，都不是學生講的話，去掉才看得到實際內容：
+    //   「共 2 則留言，無明顯正負評傾向」——只講了則數，等於沒查（1834 筆有）
+    //   「有此相同課程名稱心得，但請先注意是否為該老師（○○）所開之課程。」
+    //     ——這件事由我們自己的標題講（見 findCourseReview 的 tier），不需重複
+    // 清乾淨後若剩不到 6 個字，代表整筆沒有可讀內容，直接不收錄（4086 筆中
+    // 有 1585 筆屬此，其餘 2501 筆是學生的原話摘要）。
+    const REVIEW_NOISE = [
+        /共\s*\d+\s*則留言[^。]*。?/g,
+        /有此相同課程名稱心得，但請先注意是否為該老師（[^）]*）所開之課程。?/g,
+    ];
+
+    function cleanReviewSummary(value) {
+        let text = toPlannerString(value);
+        REVIEW_NOISE.forEach((re) => { text = text.replace(re, ''); });
+        return text.replace(/^[\s。、，]+|[\s。、，]+$/g, '');
+    }
+
+    function splitTeacherNames(value) {
+        return toPlannerString(value)
+            .split(/[,，、\/]/)
+            .map((t) => t.trim())
+            .filter(Boolean);
+    }
+
+    function buildReviewIndex(rawReviews) {
+        reviewIndex.clear();
+        if (!Array.isArray(rawReviews)) return;
+        rawReviews.forEach((item) => {
+            const summary = cleanReviewSummary(item?.['整體評價']);
+            if (summary.length < 6) return;
+            const key = normalizeCourseNameForMatch(item.course);
+            if (!key) return;
+            if (!reviewIndex.has(key)) reviewIndex.set(key, []);
+            reviewIndex.get(key).push({
+                teachers: new Set(splitTeacherNames(item.teacher)),
+                style: toPlannerString(item?.['上課方式']).trim(),
+                summary,
+            });
+        });
+    }
+
+    // 回傳 { tier, style, summary } 或 null。tier 為 'exact'（課名與教師皆相符）
+    // 或 'name-only'（只有課名相符）。同一層有多筆時取內容最長的一筆——最短的
+    // 幾乎都是「有考試」這種一句話，資訊量最低。
+    function findCourseReview(course) {
+        const candidates = reviewIndex.get(normalizeCourseNameForMatch(course.course));
+        if (!candidates || !candidates.length) return null;
+        const teachers = new Set(splitTeacherNames(course.teacher));
+        const exact = candidates.filter((r) => [...r.teachers].some((t) => teachers.has(t)));
+        const pool = exact.length ? exact : candidates;
+        const best = pool.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
+        // 教師對不上時，標題直接寫出心得實際講的是哪位老師。只說「教師不同」
+        // 仍會讓人把內文的讚美算到本課教師頭上（例：鄭孟育的人力資源管理，
+        // 心得誇的是另一位老師）。名單過長時只列前兩位。
+        const names = [...best.teachers];
+        const reviewTeacher = names.length > 2
+            ? t('reviews-teacher-more', { names: names.slice(0, 2).join('、'), n: names.length - 2 })
+            : names.join('、');
+        return {
+            tier: exact.length ? 'exact' : 'name-only',
+            style: best.style,
+            summary: best.summary,
+            reviewTeacher,
+        };
     }
 
     function normalizeCourse(item, index) {
@@ -1043,6 +1122,9 @@
             card.appendChild(createCardExperience(course));
         }
 
+        const studentReview = createCardStudentReview(course);
+        if (studentReview) card.appendChild(studentReview);
+
         card.appendChild(createCardTags(course));
         card.appendChild(createCardActions(course));
 
@@ -1173,6 +1255,47 @@
             review.style.cursor = 'default';
         }
         return review;
+    }
+
+    function createCardStudentReview(course) {
+        const found = findCourseReview(course);
+        if (!found) return null;
+
+        const box = document.createElement('div');
+        box.className = 'flex flex-col gap-1 border-l-2 border-notion-border dark:border-dark-border pl-3 py-1';
+
+        const heading = document.createElement('p');
+        heading.className = 'text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary';
+        heading.textContent = found.tier === 'exact'
+            ? t('reviews-heading-exact')
+            : (found.reviewTeacher
+                ? t('reviews-heading-other-teacher', { teacher: found.reviewTeacher })
+                : t('reviews-heading-name-only'));
+        box.appendChild(heading);
+
+        if (found.style) {
+            const style = document.createElement('p');
+            style.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+            style.textContent = t('reviews-style', { v: found.style });
+            box.appendChild(style);
+        }
+
+        const summary = document.createElement('p');
+        summary.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary leading-relaxed';
+        const truncated = truncateText(found.summary, 120);
+        summary.textContent = truncated.display;
+        if (truncated.truncated) {
+            summary.className += ' cursor-pointer hover:bg-notion-bg-hover dark:hover:bg-dark-border rounded-md';
+            summary.dataset.expanded = 'false';
+            summary.addEventListener('click', () => {
+                const open = summary.dataset.expanded === 'true';
+                summary.dataset.expanded = open ? 'false' : 'true';
+                summary.textContent = open ? truncated.display : found.summary;
+            });
+        }
+        box.appendChild(summary);
+
+        return box;
     }
 
     function createCardExperience(course) {
