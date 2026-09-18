@@ -154,6 +154,15 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// AI 讀不到學分時會回 null（prompt 明確要求）。Number(null) 是 0 而
+// Number.isFinite(0) 為真，直接轉數字會把「沒讀到」變成「0 學分」，與課表上
+// 真實存在的零學分課（班級活動、論文、各科實習）無從分辨。
+function toCreditsOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 // 上游（OpenRouter 或其文件解析引擎）暫時限流，稍候重試即可，與請求本身無關。
 function isUpstreamRateLimited(message) {
   return /rate[\s_-]?limit|429|too many requests/i.test(String(message || ""));
@@ -421,7 +430,7 @@ app.post("/api/planner-pdf", requireAuth, analyzeRateLimiter, async (req, res) =
           .map((course) => ({
             course: course.course.trim(),
             teacher: typeof course.teacher === "string" ? course.teacher.trim() : "",
-            credits: Number.isFinite(Number(course.credits)) ? Number(course.credits) : null,
+            credits: toCreditsOrNull(course.credits),
             times: Array.isArray(course.times)
               ? course.times
                   .filter((slot) => typeof slot === "string")
