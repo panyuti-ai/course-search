@@ -140,6 +140,16 @@ async function fetchAllByType2(baseOptions, delay) {
 // 未取用：unt_ls、cls_id、sub_id、scr_dup（校內流水號），
 //         scr_examid／scr_examfn／scr_exambf（疑似考試相關，語意未確認）
 
+// 去重鍵。選課代碼是一個「班級」的唯一識別，必須納入：同一門課常同時開給多個
+// 班級（例如 IECS4927 開給資訊四甲／乙／丙／丁），四筆的課名、教師、時間、學期
+// 完全相同，只有班級與名額不同（56/60、56/60、58/60、69/69）。若不納入選課代碼，
+// 四筆會被併成一筆，留下的名額只代表其中某一班，對其他班的學生是錯的。
+// selCode 缺漏時退回原本的比對方式。
+function plannerCourseKey(c) {
+    const base = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+    return c.selCode ? `${base}|${c.selCode}` : base;
+}
+
 function toCountOrNull(value) {
     if (value === null || value === undefined || value === '') return null;
     const n = Number(value);
@@ -268,7 +278,7 @@ async function scrapeSemester(year, sms, delay) {
 
     const seen = new Set();
     return courses.filter((c) => {
-        const key = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+        const key = plannerCourseKey(c);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -343,7 +353,7 @@ async function main() {
     // Global deduplicate across semesters
     const globalSeen = new Set();
     const deduped = [...kept, ...allCourses].filter((c) => {
-        const key = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+        const key = plannerCourseKey(c);
         if (globalSeen.has(key)) return false;
         globalSeen.add(key);
         return true;
