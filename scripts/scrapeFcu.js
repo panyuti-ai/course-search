@@ -20,7 +20,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE_URL = process.env.FCU_BASE_URL || 'https://coursesearch02.fcu.edu.tw/Service/Search.asmx';
@@ -130,37 +130,70 @@ async function fetchAllByType2(baseOptions, delay) {
 //   cls_name     = 班級名稱
 //   scr_period   = 時間字串 e.g. "(一)03-04 圖212_資訊素養 賴璉錡"
 //   scj_scr_mso  = 必/選修
-//   sub_id3      = 課程代碼
+//   sub_id3      = 課程編碼（如 IECS4927，跨學期穩定）
 //   scr_remarks  = 備註
+//   scr_acptcnt  = 實收名額（已選上人數）
+//   scr_precnt   = 開放名額（上限）
+//   scr_english  = 是否全英語授課 EMI，Y/N
+//   scr_ldl      = 上課方式（課堂教學／遠距…）
+//   scr_date     = 開課期間（全學期／期中前…）
+// 未取用：unt_ls、cls_id、sub_id、scr_dup（校內流水號），
+//         scr_examid／scr_examfn／scr_exambf（疑似考試相關，語意未確認）
+
+// 去重鍵。選課代碼是一個「班級」的唯一識別，必須納入：同一門課常同時開給多個
+// 班級（例如 IECS4927 開給資訊四甲／乙／丙／丁），四筆的課名、教師、時間、學期
+// 完全相同，只有班級與名額不同（56/60、56/60、58/60、69/69）。若不納入選課代碼，
+// 四筆會被併成一筆，留下的名額只代表其中某一班，對其他班的學生是錯的。
+// selCode 缺漏時退回原本的比對方式。
+function plannerCourseKey(c) {
+    const base = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+    return c.selCode ? `${base}|${c.selCode}` : base;
+}
+
+function toCountOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
 
 function normalizeCourse(raw, year, sms) {
     const courseName = raw.sub_name || '';
     const teacher    = raw.scr_teacher || '';
     const credits    = raw.scr_credit ?? null;
     const selCode    = raw.scr_selcode || '';
-    const times      = parsePeriodString(raw.scr_period || '');
+    const period     = raw.scr_period || '';
+    const times      = parsePeriodString(period);
     const required   = (raw.scj_scr_mso || '').includes('必修');
 
     return {
-        course:   courseName.trim(),
-        teacher:  teacher.trim(),
-        credits:  credits !== null ? Number(credits) : null,
+        course:     courseName.trim(),
+        teacher:    teacher.trim(),
+        credits:    credits !== null ? Number(credits) : null,
         times,
+        rooms:      parseRoomsFromPeriod(period, teacher),
         selCode,
-        semester: `${year}-${sms}`,
-        dept:     raw.cls_name || '',
+        courseCode: (raw.sub_id3 || '').trim(),
+        semester:   `${year}-${sms}`,
+        dept:       raw.cls_name || '',
         required,
-        note:     raw.scr_remarks || '',
-        source:   'fcu_scrape',
+        enrolled:   toCountOrNull(raw.scr_acptcnt),
+        capacity:   toCountOrNull(raw.scr_precnt),
+        emi:        (raw.scr_english || '').trim().toUpperCase() === 'Y',
+        mode:       (raw.scr_ldl || '').trim(),
+        dateRange:  (raw.scr_date || '').trim(),
+        note:       raw.scr_remarks || '',
+        source:     'fcu_scrape',
     };
 }
+
+// 節次標記，例如 (一)03 或 (一)03-05。parsePeriodString 與 parseRoomsFromPeriod 共用。
+const PERIOD_RE = /[（(]([一二三四五六日])[)）](\d{2})(?:-(\d{2}))?/g;
 
 // Parse FCU period string like "(一)03-04 圖212 賴璉錡" or "(三)07-09 (五)11-13"
 function parsePeriodString(str) {
     const dayMap = { '一': 'MON', '二': 'TUE', '三': 'WED', '四': 'THU', '五': 'FRI', '六': 'SAT', '日': 'SUN' };
     const slots = [];
-    // Match patterns like (一)03 or (一)03-05
-    const re = /[（(]([一二三四五六日])[)）](\d{2})(?:-(\d{2}))?/g;
+    const re = new RegExp(PERIOD_RE.source, 'g');
     let m;
     while ((m = re.exec(str)) !== null) {
         const day = dayMap[m[1]];
@@ -172,6 +205,41 @@ function parsePeriodString(str) {
         }
     }
     return slots;
+}
+
+// 從節次字串裡取出教室。教室緊接在每個節次標記之後，例如
+//   "(二)05     學209 王治強"                  → 學209
+//   "(二)05 未排教室 (三)05 未排教室 周兆龍,…"  → 未排教室
+// 但教室可能整個不存在，此時該位置直接是教師名：
+//   "(一)00 曾怡享"                            → 無教室
+// 因此用 scr_teacher 的內容排除教師名。回傳去重後的陣列，順序保留。
+function parseRoomsFromPeriod(str, teacher) {
+    const text = String(str || '');
+    const teacherNames = new Set(
+        String(teacher || '').split(/[,，、\/\s]+/).map((t) => t.trim()).filter(Boolean)
+    );
+
+    // 先蒐集所有節次標記的位置，教室就落在相鄰兩個標記之間
+    const re = new RegExp(PERIOD_RE.source, 'g');
+    const marks = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        marks.push({ end: m.index + m[0].length, start: m.index });
+    }
+
+    const rooms = [];
+    const seen = new Set();
+    marks.forEach((mark, i) => {
+        const until = i + 1 < marks.length ? marks[i + 1].start : text.length;
+        const token = text.slice(mark.end, until).trim().split(/\s+/)[0] || '';
+        if (!token) return;
+        // 教師名可能以逗號串接，取第一個名字判斷即可
+        if (teacherNames.has(token.split(/[,，、]/)[0])) return;
+        if (seen.has(token)) return;
+        seen.add(token);
+        rooms.push(token);
+    });
+    return rooms;
 }
 
 // ── 主流程 ────────────────────────────────────────────────────
@@ -210,7 +278,7 @@ async function scrapeSemester(year, sms, delay) {
 
     const seen = new Set();
     return courses.filter((c) => {
-        const key = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+        const key = plannerCourseKey(c);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -285,7 +353,7 @@ async function main() {
     // Global deduplicate across semesters
     const globalSeen = new Set();
     const deduped = [...kept, ...allCourses].filter((c) => {
-        const key = `${c.course}|${c.teacher}|${c.times.join(',')}|${c.semester}`;
+        const key = plannerCourseKey(c);
         if (globalSeen.has(key)) return false;
         globalSeen.add(key);
         return true;
@@ -310,7 +378,15 @@ async function main() {
     });
 }
 
-main().catch((e) => {
-    console.error('爬蟲執行失敗：', e);
-    process.exit(1);
-});
+// 僅在直接以 node 執行時啟動爬蟲；被 import 時不執行，以便對解析函式做單元測試。
+const invokedDirectly = process.argv[1]
+    && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (invokedDirectly) {
+    main().catch((e) => {
+        console.error('爬蟲執行失敗：', e);
+        process.exit(1);
+    });
+}
+
+export { normalizeCourse, parsePeriodString, parseRoomsFromPeriod };
