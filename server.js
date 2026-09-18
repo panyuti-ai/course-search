@@ -152,6 +152,17 @@ async function callAI(prompt, { json = false, temperature = 0.5 } = {}) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 上游（OpenRouter 或其文件解析引擎）暫時限流，稍候重試即可，與請求本身無關。
+function isUpstreamRateLimited(message) {
+  return /rate[\s_-]?limit|429|too many requests/i.test(String(message || ""));
+}
+
+// 僅針對限流退避重試。PDF OCR 已經偏慢，重試會再拉長回應時間，因此只試兩次、
+// 間隔保守；其他錯誤（金鑰失效、模型不存在等）重試沒有意義，立即失敗。
+const RATE_LIMIT_RETRY_DELAYS_MS = [3000, 8000];
+
 async function callOpenAICompatible(messages, { model, json = false, temperature = 0.1, maxTokens = 2048 } = {}) {
   const body = {
     model: model || process.env.OPENAI_MODEL || "gpt-4o-mini",
@@ -163,20 +174,28 @@ async function callOpenAICompatible(messages, { model, json = false, temperature
   const plugins = getOpenRouterPdfPlugins();
   if (plugins) body.plugins = plugins;
 
-  const response = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content?.trim() || "";
+    }
+
     const text = await response.text();
+    if (isUpstreamRateLimited(text) && attempt < RATE_LIMIT_RETRY_DELAYS_MS.length) {
+      console.warn(`上游限流，${RATE_LIMIT_RETRY_DELAYS_MS[attempt]}ms 後重試（第 ${attempt + 1} 次）`);
+      await sleep(RATE_LIMIT_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
     throw new Error(`OpenAI-compatible API error: ${text}`);
   }
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
 function getOpenRouterPdfPlugins() {
@@ -206,7 +225,9 @@ app.use(compression());
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST"],
+    // 需與實際路由一致：收藏刪除與課表儲存分別使用 DELETE 與 PUT。
+    // 目前前後端同源不會觸發 preflight，但跨來源呼叫時缺少這兩個方法會被擋下。
+    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
@@ -418,6 +439,11 @@ app.post("/api/planner-pdf", requireAuth, analyzeRateLimiter, async (req, res) =
     return res.json({ courses, warnings, studentGrade });
   } catch (error) {
     console.error("planner-pdf error:", error);
+    // 上游限流是暫時性的，使用者稍候重試即可；沿用「伺服器發生錯誤」會讓人
+    // 誤以為網站故障而放棄。
+    if (isUpstreamRateLimited(error?.message)) {
+      return res.status(503).json({ error: "課表辨識服務目前忙碌中，請稍候約一分鐘再試一次。" });
+    }
     return res.status(500).json({ error: "伺服器處理 PDF 課表辨識時發生錯誤。" });
   }
 });
