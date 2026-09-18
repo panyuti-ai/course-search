@@ -2769,7 +2769,11 @@
     // 回填之後才知道哪些課真的查不到學分，警告由此產生而非沿用 AI 的說法。
     function buildPlannerUploadWarnings(courses, aiWarnings) {
         const warnings = [];
-        const unknown = courses.filter((c) => !Number.isFinite(c.credits) || c.credits <= 0);
+        // 0 學分是學校 API 的有效答案（scr_credit），不是「查不到」：115-1 就有 506 筆
+        // 零學分課程（班級活動 171、碩士論文 52、各科實習課等），這些課很常出現在
+        // 學生課表上。只有真的無法確定學分時（enrichPlannerCourseCredits 查無結果會
+        // 明確填回 null）才提醒。
+        const unknown = courses.filter((c) => !Number.isFinite(c.credits) || c.credits < 0);
         if (unknown.length) {
             const names = unknown.slice(0, 3).map((c) => toPlannerString(c.course)).filter(Boolean).join('、');
             warnings.push(t('pdf-credits-unknown', { n: unknown.length, names }));
@@ -4675,7 +4679,9 @@
             return { ...course, credits: prefixCredits };
         }
 
-        return course;
+        // 查不到就明確填 null。走到這裡代表 PDF/AI 給的值本來就不是正數（null、0 或
+        // 負數），留著它會與「目錄查證得到的 0 學分」長得一模一樣，下游無從分辨。
+        return { ...course, credits: null };
     }
 
     function buildPlannerUserContextTokens() {
