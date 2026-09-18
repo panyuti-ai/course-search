@@ -164,13 +164,15 @@ function normalizeCourse(raw, year, sms) {
     const period     = raw.scr_period || '';
     const times      = parsePeriodString(period);
     const required   = (raw.scj_scr_mso || '').includes('必修');
+    // 先取教師再取教室：教室解析要靠教師名單來排除人名，名單越完整越準。
+    const fullTeacher = parseTeachersFromPeriod(period, teacher);
 
     return {
         course:     courseName.trim(),
-        teacher:    teacher.trim(),
+        teacher:    fullTeacher,
         credits:    credits !== null ? Number(credits) : null,
         times,
-        rooms:      parseRoomsFromPeriod(period, teacher),
+        rooms:      parseRoomsFromPeriod(period, fullTeacher),
         selCode,
         courseCode: (raw.sub_id3 || '').trim(),
         semester:   `${year}-${sms}`,
@@ -205,6 +207,33 @@ function parsePeriodString(str) {
         }
     }
     return slots;
+}
+
+// 取回完整教師名單。scr_teacher 被學校的 API 截斷在 80 字元，多位教師合授的課
+// （例如專題研究(二) 資訊四甲共 29 位指導老師）只會留下前 20 位；但同一份名單
+// 在 scr_period 的尾端是完整的：
+//   "(二)05     未排教室 (三)05     未排教室 周兆龍,林志敏,…,桑慧敏"
+//
+// 取法：整串最後一個以空白分隔的詞即為名單。該位置也可能是教室（該課沒有登記
+// 教師時），因此以 scr_teacher 的第一個名字驗證——截斷砍的是尾端，第一個名字
+// 必定完整，比對得上才採用 scr_period 的版本，否則沿用 scr_teacher。
+function parseTeachersFromPeriod(str, teacher) {
+    const fallback = String(teacher || '').trim();
+    const text = String(str || '').trim();
+    if (!text || !fallback) return fallback;
+
+    const splitNames = (v) => v.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+    const tokens = text.split(/\s+/);
+    const candidate = tokens[tokens.length - 1] || '';
+    const names = splitNames(candidate);
+    const fallbackNames = splitNames(fallback);
+    if (!names.length || !fallbackNames.length) return fallback;
+
+    // 第一個名字對不上代表那串不是教師名單（多半是教室），不予採用。
+    if (names[0] !== fallbackNames[0]) return fallback;
+    // scr_period 的名單短於 scr_teacher 時沒有取用的價值，保留原值。
+    if (names.length < fallbackNames.length) return fallback;
+    return names.join(',');
 }
 
 // 從節次字串裡取出教室。教室緊接在每個節次標記之後，例如
@@ -389,4 +418,4 @@ if (invokedDirectly) {
     });
 }
 
-export { normalizeCourse, parsePeriodString, parseRoomsFromPeriod };
+export { normalizeCourse, parsePeriodString, parseRoomsFromPeriod, parseTeachersFromPeriod };
