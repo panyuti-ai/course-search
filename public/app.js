@@ -800,7 +800,13 @@
             return;
         }
 
+        const currentSemester = getCurrentSemester();
         let results = state.courses.filter((course) => {
+            // 只呈現當學期有開的課：舊學期的課學生已經選不到了
+            if (currentSemester && course.semester && course.semester !== currentSemester) {
+                return false;
+            }
+
             if (query) {
                 const tokens = query.split(/\s+/).filter(Boolean);
                 const searchable = [
@@ -903,6 +909,21 @@
         const match = /^(\d+)-(\d+)$/.exec(String(value || '').trim());
         if (!match) return null;
         return Number(match[1]) * 10 + Number(match[2]);
+    }
+
+    // 資料中最新的一個學期，例如 "115-1"。學生只能選當學期有開的課，
+    // 因此搜尋結果只呈現這個學期；舊學期資料保留在檔案中，僅供回查使用。
+    let cachedCurrentSemester;
+    function getCurrentSemester() {
+        if (cachedCurrentSemester !== undefined) return cachedCurrentSemester;
+        let best = null;
+        let bestKey = -Infinity;
+        state.courses.forEach((c) => {
+            const key = parseSemesterKey(c.semester);
+            if (key != null && key > bestKey) { bestKey = key; best = c.semester; }
+        });
+        cachedCurrentSemester = best;
+        return best;
     }
 
     // 新學期排前面；沒有學期資訊的一律排最後。
@@ -1230,8 +1251,18 @@
             performAnalysis(course, aiResult, aiButton);
         });
 
+        // 教師欄位可能是一長串共同授課的名單（例如專題研究有 20 位）。
+        // 把整串丟進搜尋不會有任何文章同時提到所有人，結果必定為空，
+        // 而任選其中一位又等於替使用者亂猜，因此這種情況只用課名搜尋。
+        const teacherNames = toPlannerString(course.teacher)
+            .split(/[,，、\/]/)
+            .map((t) => t.trim())
+            .filter(Boolean);
+        const dcardSingleTeacher = teacherNames.length === 1 ? teacherNames[0] : '';
+        const dcardNameOnly = teacherNames.length > 1;
+
         const dcardButton = document.createElement('a');
-        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent('逢甲 ' + (course.course || '') + (course.teacher ? ' ' + course.teacher : ''))}`;
+        dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent('逢甲 ' + (course.course || '') + (dcardSingleTeacher ? ' ' + dcardSingleTeacher : ''))}`;
         dcardButton.target = '_blank';
         dcardButton.rel = 'noopener noreferrer';
         dcardButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
@@ -1239,8 +1270,19 @@
         dcardButton.addEventListener('mouseover', () => { dcardButton.style.backgroundColor = '#0055CC'; });
         dcardButton.addEventListener('mouseout', () => { dcardButton.style.backgroundColor = '#006AFF'; });
         dcardButton.textContent = t('dcard-review');
+        if (dcardNameOnly) dcardButton.title = t('dcard-name-only-hint', { n: teacherNames.length });
 
         actionsRow.append(favoriteButton, shareButton, dcardButton, aiButton);
+
+        // 多位共同授課教師時，明確告知搜尋範圍只有課名，不要讓使用者
+        // 誤以為看到的是這位教師的評價。actionsRow 此時尚未掛上卡片，
+        // 因此先建立，於下方與 actionsRow 一同加入。
+        let dcardNote = null;
+        if (dcardNameOnly) {
+            dcardNote = document.createElement('p');
+            dcardNote.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+            dcardNote.textContent = t('dcard-name-only-note', { n: teacherNames.length });
+        }
 
         // 加入規劃按鈕（獨立一行，有框框）
         const addToPlanRow = document.createElement('div');
@@ -1399,7 +1441,7 @@
         });
 
         addToPlanRow.appendChild(addToPlanBtn);
-        actions.append(actionsRow, addToPlanRow, aiResult);
+        actions.append(actionsRow, ...(dcardNote ? [dcardNote] : []), addToPlanRow, aiResult);
         return actions;
     }
 
@@ -4481,9 +4523,13 @@
             return { ...course, credits: parsedCredits };
         }
 
-        // Strip trailing "(老師名)" suffixes that may be embedded in the parsed course name.
-        // e.g. "專題研究(一)(陳錫民)" → "專題研究(一)", "體育(二)(黃素)" → "體育(二)"
-        // Also handle unclosed brackets from PDF truncation: "體育(二)(黃素" → "體育(二)"
+        // 課名尾端的括號有兩種可能：PDF 把授課教師黏在課名後面
+        // （「專題研究(一)(陳錫民)」），或那本來就是課名的一部分
+        // （「程式設計(II)」「工程圖學(含實習)」）。兩者長相相同，無法只看字串分辨。
+        //
+        // 因此先用原始課名比對；只有在目錄中完全找不到該課名時，才退回使用
+        // 去掉尾巴的版本。若先去尾再比對，「程式設計(II)」會被改成「程式設計」
+        // 而對到另一門真實存在、學分不同的課（實測會造成 4 筆填錯）。
         const rawName = toPlannerString(course.course);
         let strippedName = rawName.replace(/[（(][^()（）]{2,6}[)）]$/, (match) => {
             const inner = match.replace(/[（()）]/g, '');
@@ -4492,7 +4538,8 @@
         });
         // Remove unclosed trailing bracket like "(黃素" at end of string
         strippedName = strippedName.replace(/[（(][\u4e00-\u9fffA-Za-z]{1,6}$/, '');
-        const name = normalizeCourseNameForMatch(strippedName);
+        const exactName = normalizeCourseNameForMatch(rawName);
+        const fallbackName = normalizeCourseNameForMatch(strippedName);
         const teacher = normalizeCourseNameForMatch(course.teacher);
 
         // Check if a catalog teacher list contains our teacher (exact or prefix match).
@@ -4547,12 +4594,32 @@
         }
 
         // Pass 1: exact course name match
-        const exactMatches = [];
-        for (const c of state.courses) {
-            if (c.sourceKey !== 'fcu_scrape') continue;
-            if (normalizeCourseNameForMatch(c.course) !== name) continue;
-            exactMatches.push(c);
+        //
+        // 只比對最新學期。學生上傳的是當學期課表，而同一個課名在不同學年的
+        // 學分可能不同（例如某課 114-1 為 3 學分、115-1 為 2 學分），把舊學期
+        // 一起納入會製造出不存在的「學分不一致」而放棄，或直接採用過期的值。
+        // 實測以完整目錄比對會填錯 4 筆，僅用最新學期則為 0 筆。
+        // 僅當該課名在最新學期完全不存在時（學校中途下架、或上傳的是舊課表）
+        // 才退回比對所有學期。
+        const currentSemester = getCurrentSemester();
+        function collectByName(target) {
+            const inCurrent = [];
+            const inAny = [];
+            if (!target) return { inCurrent, inAny };
+            for (const c of state.courses) {
+                if (c.sourceKey !== 'fcu_scrape') continue;
+                if (normalizeCourseNameForMatch(c.course) !== target) continue;
+                inAny.push(c);
+                if (!currentSemester || c.semester === currentSemester) inCurrent.push(c);
+            }
+            return { inCurrent, inAny };
         }
+
+        let { inCurrent, inAny } = collectByName(exactName);
+        if (!inAny.length && fallbackName !== exactName) {
+            ({ inCurrent, inAny } = collectByName(fallbackName));
+        }
+        const exactMatches = inCurrent.length ? inCurrent : inAny;
         const exactCredits = resolveFrom(exactMatches);
         if (exactCredits != null) {
             return { ...course, credits: exactCredits };
@@ -4566,7 +4633,7 @@
         for (const c of state.courses) {
             if (c.sourceKey !== 'fcu_scrape') continue;
             const cname = normalizeCourseNameForMatch(c.course);
-            if (cname.length < 4 || !name.startsWith(cname)) continue;
+            if (cname.length < 4 || !exactName.startsWith(cname)) continue;
             if (!teacherMatches(c.teacher)) continue;
             if (cname.length > prefixBestLen) {
                 prefixBestLen = cname.length;
