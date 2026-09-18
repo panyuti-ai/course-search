@@ -4473,7 +4473,8 @@
     }
 
     // Look up credits for a PDF-parsed course from the fcu_courses catalog.
-    // Matches by normalised course name (and optionally teacher name).
+    // 以課名為基礎，再用教師與節次收斂候選；只有在候選的學分一致時才採用，
+    // 無法確定時維持未填，由既有的警告訊息呈現。
     function enrichPlannerCourseCredits(course) {
         const parsedCredits = toPlannerNumber(course.credits);
         if (parsedCredits && parsedCredits > 0) {
@@ -4505,67 +4506,78 @@
                 .some((t) => t === teacher || (teacher.length >= 2 && t.startsWith(teacher)));
         }
 
-        function timeMatchScore(catalogCourse) {
+        // 課表 PDF 的節次是否被目錄該筆涵蓋。PDF 有時只讀到部分節次，
+        // 因此用「包含」而非「完全相同」。
+        function timeMatches(catalogCourse) {
             const uploadedTimes = Array.isArray(course.times) ? course.times : [];
             const catalogTimes = Array.isArray(catalogCourse.times) ? catalogCourse.times : [];
-            if (!uploadedTimes.length || !catalogTimes.length) return 0;
-
+            if (!uploadedTimes.length || !catalogTimes.length) return false;
             const catalogSet = new Set(catalogTimes);
-            const allUploadedMatch = uploadedTimes.every((slot) => catalogSet.has(slot));
-            if (allUploadedMatch) return 2;
+            return uploadedTimes.every((slot) => catalogSet.has(slot));
+        }
 
-            return uploadedTimes.some((slot) => catalogSet.has(slot)) ? 1 : 0;
+        // 候選課程的學分若完全一致就回傳該值，否則回傳 null（代表無法確定）。
+        function unanimousCredits(list) {
+            const values = new Set(list.map((c) => c.credits).filter((v) => v != null));
+            return values.size === 1 ? [...values][0] : null;
+        }
+
+        // 由窄到寬逐層放寬條件，每一層都要求候選的學分一致才採用。
+        // 全部落空時不填，寧可顯示「無法辨識」也不要給錯的學分。
+        //
+        // 以 115-1 全部 3569 筆資料回推驗證：
+        //   課名 + 老師 + 節次  99.94% 可唯一確定學分
+        //   課名 + 節次         99.72%
+        //   課名 + 老師         99.7%
+        //   只有課名            98.0%
+        // 例如「專題研究(二)」全校 14 筆、學分有 1 與 2 兩種，僅靠課名必然猜錯；
+        // 加上節次後只剩資訊四甲乙丙丁四筆，學分一致為 2。
+        function resolveFrom(candidates) {
+            if (!candidates.length) return null;
+            const withTeacher = candidates.filter((c) => teacherMatches(c.teacher));
+            const withTime = candidates.filter((c) => timeMatches(c));
+            const both = withTeacher.filter((c) => withTime.includes(c));
+
+            for (const tier of [both, withTeacher, withTime, candidates]) {
+                if (!tier.length) continue;
+                const credits = unanimousCredits(tier);
+                if (credits != null) return credits;
+            }
+            return null;
         }
 
         // Pass 1: exact course name match
-        let best = null;
-        let bestScore = -1;
-        let bestHasTeacher = false;
-        // Collect all credits values for this course name to detect if they're all the same
         const exactMatches = [];
         for (const c of state.courses) {
             if (c.sourceKey !== 'fcu_scrape') continue;
-            const cname = normalizeCourseNameForMatch(c.course);
-            if (cname !== name) continue;
+            if (normalizeCourseNameForMatch(c.course) !== name) continue;
             exactMatches.push(c);
-            const tm = teacherMatches(c.teacher);
-            const score = (tm ? 10 : 0) + timeMatchScore(c);
-            if (tm && score > bestScore) {
-                best = c;
-                bestScore = score;
-                bestHasTeacher = true;
-            } else if (!best) {
-                best = c;
-                bestScore = score;
-            }
         }
-        // If teacher is unknown but all matching entries have the same credits, use that value safely
-        if (!bestHasTeacher && exactMatches.length) {
-            const uniqueCredits = new Set(exactMatches.map((c) => c.credits).filter((v) => v != null));
-            if (uniqueCredits.size === 1) {
-                best = exactMatches[0];
-                bestHasTeacher = false;
-            }
-        }
-        if (best && best.credits != null) {
-            return { ...course, credits: best.credits };
+        const exactCredits = resolveFrom(exactMatches);
+        if (exactCredits != null) {
+            return { ...course, credits: exactCredits };
         }
 
         // Pass 2: prefix match — handles junk appended to course name in FCU PDF cells
         // e.g. "人工智慧導論資電330(電腦實習" → prefix "人工智慧導論" (min 4 chars, teacher must match)
-        let prefixBest = null;
+        // 取最長的前綴，並同樣要求候選的學分一致。
         let prefixBestLen = 0;
+        let prefixMatches = [];
         for (const c of state.courses) {
             if (c.sourceKey !== 'fcu_scrape') continue;
             const cname = normalizeCourseNameForMatch(c.course);
-            if (cname.length < 4 || !name.startsWith(cname) || cname.length <= prefixBestLen) continue;
-            if (teacherMatches(c.teacher)) {
-                prefixBest = c;
+            if (cname.length < 4 || !name.startsWith(cname)) continue;
+            if (!teacherMatches(c.teacher)) continue;
+            if (cname.length > prefixBestLen) {
                 prefixBestLen = cname.length;
+                prefixMatches = [c];
+            } else if (cname.length === prefixBestLen) {
+                prefixMatches.push(c);
             }
         }
-        if (prefixBest && prefixBest.credits != null) {
-            return { ...course, credits: prefixBest.credits };
+        const prefixCredits = resolveFrom(prefixMatches);
+        if (prefixCredits != null) {
+            return { ...course, credits: prefixCredits };
         }
 
         return course;
