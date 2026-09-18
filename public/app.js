@@ -145,6 +145,10 @@
             uploadedCourses: [],
             targetCredits: 18,
             hasPlan: false,
+            // 上傳課表時產生的警告（例如查不到學分）與排課過程的警告分開存放：
+            // 排課時會整批覆寫 warnings，若共用同一個陣列，使用者一按下產生課表
+            // 就再也看不到上傳時的提醒，但那門課仍以 0 學分計入。
+            uploadWarnings: [],
             warnings: [],
             studentGrade: null,
             shuffleSeed: 0,
@@ -1721,7 +1725,11 @@
             state.planner.hasPlan = false;
             state.planner.pool = [];
             state.planner.selected = new Map();
-            state.planner.warnings = parsed.warnings.slice();
+            // 警告在「學分回填之後」才產生：AI 讀 PDF 時多半讀不到學分（課表上通常
+            // 沒印），但我們接著會去課程目錄查。若沿用 AI 當下的說法，畫面會一邊說
+            // 「無法辨識學分」一邊顯示查到的學分，自相矛盾。
+            // AI 提到學分或必選修的警告一律捨棄——這兩項由系統查證，不該由 AI 論斷。
+            state.planner.uploadWarnings = buildPlannerUploadWarnings(enriched, parsed.warnings);
             state.planner.studentGrade = parsed.studentGrade ?? null;
 
             updatePlannerUploadedSummary();
@@ -1730,14 +1738,17 @@
 
             renderPlanner();
 
-            if (parsed.warnings.length) {
-                showToast(t('pdf-parsed-warn', { file: file.name, n: parsed.courses.length, warn: parsed.warnings[0] }), 'success');
+            // 用回填後自行產生的警告，而非 AI 的原話（見上方 buildPlannerUploadWarnings）
+            const warnings = state.planner.uploadWarnings;
+            if (warnings.length) {
+                showToast(t('pdf-parsed-warn', { file: file.name, n: parsed.courses.length, warn: warnings[0] }), 'success');
             } else {
                 showToast(t('pdf-parsed', { file: file.name, n: parsed.courses.length }), 'success');
             }
         } catch (error) {
             console.error('Failed to read planner file:', error);
             state.planner.uploadedCourses = [];
+            state.planner.uploadWarnings = [];
             if (fileNameEl) fileNameEl.textContent = t('no-file-selected');
             if (uploadedCreditsEl) uploadedCreditsEl.classList.add('hidden');
             showToast(error.message || t('pdf-read-failed'), 'error');
@@ -2755,6 +2766,22 @@
     // 沒上傳課表 PDF 時停用「產生建議課表」，並說明原因
     // 已辨識課程數與已修學分的摘要。上傳後與移除課程後都要重算，
     // 否則移除已解除固定的課之後，這行仍會顯示舊的數字。
+    // 回填之後才知道哪些課真的查不到學分，警告由此產生而非沿用 AI 的說法。
+    function buildPlannerUploadWarnings(courses, aiWarnings) {
+        const warnings = [];
+        const unknown = courses.filter((c) => !Number.isFinite(c.credits) || c.credits <= 0);
+        if (unknown.length) {
+            const names = unknown.slice(0, 3).map((c) => toPlannerString(c.course)).filter(Boolean).join('、');
+            warnings.push(t('pdf-credits-unknown', { n: unknown.length, names }));
+        }
+        // 保留 AI 對「課程本身」的提醒，但濾掉學分與必選修——prompt 已要求不要產生，
+        // 這裡再擋一次，避免模型沒照做時又把矛盾的說法顯示給使用者。
+        const kept = (Array.isArray(aiWarnings) ? aiWarnings : [])
+            .filter((w) => typeof w === 'string' && w.trim())
+            .filter((w) => !/學分|必選修|credits?|required/i.test(w));
+        return [...warnings, ...kept].slice(0, 8);
+    }
+
     function updatePlannerUploadedSummary() {
         const el = document.getElementById('planner-uploaded-credits');
         if (!el) return;
@@ -3298,7 +3325,8 @@
         summary.classList.remove('hidden');
 
         if (!state.planner.hasPlan) {
-            const warningText = state.planner.warnings.length ? `（${state.planner.warnings.join(' ')}）` : '';
+            const allWarnings = [...state.planner.uploadWarnings, ...state.planner.warnings].filter(Boolean);
+            const warningText = allWarnings.length ? `（${allWarnings.join(' ')}）` : '';
             summary.textContent = `${t('planner-no-plan')}${warningText}`;
             selectedContainer.appendChild(createPlannerEmptyState(t('planner-empty-selected')));
             candidateContainer.appendChild(createPlannerEmptyState(t('planner-empty-candidate')));
@@ -3316,7 +3344,7 @@
         const missingCredits = Math.max(targetCredits - selectedCredits, 0);
         const unknownTimeCount = selectedList.filter((course) => !course.timeSlots.length).length;
 
-        const warnings = state.planner.warnings.filter(Boolean);
+        const warnings = [...state.planner.uploadWarnings, ...state.planner.warnings].filter(Boolean);
         const warningText = warnings.length ? `。${warnings.join(' ')}` : '';
         const unknownTimeText = '';
         summary.textContent =
@@ -5088,6 +5116,10 @@
             output.textContent = t('ai-fill-bg');
             output.classList.remove('hidden');
             output.classList.add('text-notion-red');
+            // 欄位旁本來就有「填寫後才能使用 AI 評估」的提示，但它在頁面上方，
+            // 使用者按到卡片裡的按鈕時早已看不到。直接把他帶過去，省得自己找。
+            elements.userContext?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => elements.userContext?.focus({ preventScroll: true }), 300);
             return;
         }
 

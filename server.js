@@ -376,11 +376,15 @@ app.post("/api/planner-pdf", requireAuth, analyzeRateLimiter, async (req, res) =
 
 規則：
 - course 必須是課名，不要包含教室、節次、選課代碼。
-- credits 必須是數字；無法辨識用 null。
+- credits 必須是數字；無法辨識用 null。課表上通常沒有印學分，辨識不出來是正常的。
 - times 使用英文星期 MON/TUE/WED/THU/FRI/SAT/SUN 加節次，例如 MON1、TUE10、FRI11。
 - 若同一課程跨多個節次或多天，times 放全部節次。
 - studentGrade 若從班級或年級資訊看得出來，回傳 1 到 5；無法辨識用 null。
-- warnings 用繁體中文簡短列出不確定處，沒有則空陣列。`;
+- warnings 只列出「課程本身辨識不確定」的情況，例如課名模糊、節次看不清楚。
+  **不要**因為 credits 或 required 無法判斷而產生警告——這兩項由系統另行查證，
+  你回傳 null / false 即可。
+- warnings 用繁體中文自然語句撰寫，**不得出現任何英文欄位名稱**
+  （例如不可寫「required 暫設為 false」）。沒有要提醒的就回傳空陣列。`;
 
   try {
     const content = await callOpenAICompatible(
