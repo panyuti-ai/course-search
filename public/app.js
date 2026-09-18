@@ -326,9 +326,8 @@
     }
 
     // ── 學生心得 ────────────────────────────────────────────────
-    // 這批心得是從網路蒐集來的，課程與教師的歸屬不保證正確，因此顯示時必須
-    // 說清楚我們實際知道什麼：課名與教師都對得上，才敢說是「這門課這位老師」
-    // 的心得；只有課名對得上時，明說是同名課程、教師不同。
+    // 這批心得是從網路蒐集來的，課程與教師的歸屬不保證正確，因此只在課名與
+    // 教師都對得上時才顯示——唯有那時才敢說這是「這門課這位老師」的心得。
     //
     // 原始資料另有「結論」欄位（「口碑很好，強烈推薦修課」之類的斷言），刻意
     // 不顯示：4086 筆裡有 54% 是「評價褒貶不一」等於沒講，而其餘的確定語氣
@@ -379,26 +378,20 @@
     // 回傳 { tier, style, summary } 或 null。tier 為 'exact'（課名與教師皆相符）
     // 或 'name-only'（只有課名相符）。同一層有多筆時取內容最長的一筆——最短的
     // 幾乎都是「有考試」這種一句話，資訊量最低。
+    // 只在課名與教師都對得上時才回傳，否則回 null。教學風格取決於教師而非
+    // 課名，同名不同師的心得對想查這位教師的人毫無用處：全校同時開「人力資源
+    // 管理」的王妙如與鄭孟育兩班並排在搜尋結果裡，把王妙如的心得掛到鄭孟育的
+    // 卡片上，只是把王妙如那張卡片已有的內容再印一次。
+    // 對不上就不顯示，卡片上的 Dcard 按鈕仍可讓使用者自行查證。
     function findCourseReview(course) {
         const candidates = reviewIndex.get(normalizeCourseNameForMatch(course.course));
         if (!candidates || !candidates.length) return null;
         const teachers = new Set(splitTeacherNames(course.teacher));
-        const exact = candidates.filter((r) => [...r.teachers].some((t) => teachers.has(t)));
-        const pool = exact.length ? exact : candidates;
-        const best = pool.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
-        // 教師對不上時，標題直接寫出心得實際講的是哪位老師。只說「教師不同」
-        // 仍會讓人把內文的讚美算到本課教師頭上（例：鄭孟育的人力資源管理，
-        // 心得誇的是另一位老師）。名單過長時只列前兩位。
-        const names = [...best.teachers];
-        const reviewTeacher = names.length > 2
-            ? t('reviews-teacher-more', { names: names.slice(0, 2).join('、'), n: names.length - 2 })
-            : names.join('、');
-        return {
-            tier: exact.length ? 'exact' : 'name-only',
-            style: best.style,
-            summary: best.summary,
-            reviewTeacher,
-        };
+        const matched = candidates.filter((r) => [...r.teachers].some((name) => teachers.has(name)));
+        if (!matched.length) return null;
+        // 同一門課有多筆時取內容最長的：最短的幾乎都是「有考試」這種一句話。
+        const best = matched.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
+        return { style: best.style, summary: best.summary };
     }
 
     function normalizeCourse(item, index) {
@@ -1281,11 +1274,7 @@
 
         const heading = document.createElement('p');
         heading.className = 'text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary';
-        heading.textContent = found.tier === 'exact'
-            ? t('reviews-heading-exact')
-            : (found.reviewTeacher
-                ? t('reviews-heading-other-teacher', { teacher: found.reviewTeacher })
-                : t('reviews-heading-name-only'));
+        heading.textContent = t('reviews-heading-exact');
         box.appendChild(heading);
 
         if (found.style) {
