@@ -199,6 +199,7 @@
         plannerTimetableLegend: document.getElementById('planner-timetable-legend'),
         floatingTimetable: document.getElementById('floating-timetable'),
         floatingTimetableTable: document.getElementById('floating-timetable-table'),
+        floatingTimetableScroll: document.getElementById('floating-timetable-scroll'),
         plannerChatBtn: document.getElementById('planner-chat-btn'),
         plannerChatPanel: document.getElementById('planner-chat-panel'),
         plannerChatClose: document.getElementById('planner-chat-close'),
@@ -640,6 +641,12 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
+
+        const smaller = document.getElementById('floating-timetable-smaller');
+        const bigger = document.getElementById('floating-timetable-bigger');
+        if (smaller) smaller.addEventListener('click', () => stepFloatingTimetableSize(-1));
+        if (bigger) bigger.addEventListener('click', () => stepFloatingTimetableSize(1));
+        applyFloatingTimetableSize();
 
         const floatingClose = document.getElementById('floating-timetable-close');
         if (floatingClose) {
@@ -4138,6 +4145,52 @@
             list.appendChild(card);
         });
         container.appendChild(list);
+    }
+
+    // 動態課表的三段大小。寬度用行內樣式而非 Tailwind class：CDN 版的 JIT
+    // 只掃得到原始碼裡出現過的 class，JS 後來加上去的不會產生對應樣式。
+    // 寬度另以 calc(100vw - 3rem) 封頂，免得在窄螢幕上撐出畫面。
+    const FLOATING_TIMETABLE_SIZES = [
+        { width: 18, maxHeight: 18 },
+        { width: 26, maxHeight: 24 },
+        { width: 34, maxHeight: 30 },
+    ];
+    const FLOATING_TIMETABLE_SIZE_KEY = 'floating_timetable_size';
+
+    // localStorage 在無痕模式或停用 cookie 時會丟例外，讀寫都要能失敗
+    function readFloatingTimetableSize() {
+        let raw = null;
+        try { raw = localStorage.getItem(FLOATING_TIMETABLE_SIZE_KEY); } catch { /* 忽略 */ }
+        // 沒存過時 raw 是 null，而 Number(null) 是 0——那是合法索引，會讓預設
+        // 變成最小尺寸而非中等。先確認真的讀到東西再轉數字。
+        if (typeof raw !== 'string' || raw === '') return 1;
+        const index = Number(raw);
+        if (!Number.isInteger(index) || index < 0 || index >= FLOATING_TIMETABLE_SIZES.length) return 1;
+        return index;
+    }
+
+    function applyFloatingTimetableSize() {
+        const panel = elements.floatingTimetable;
+        if (!panel) return;
+        const index = readFloatingTimetableSize();
+        const size = FLOATING_TIMETABLE_SIZES[index];
+        panel.style.width = `min(${size.width}rem, calc(100vw - 3rem))`;
+        if (elements.floatingTimetableScroll) {
+            elements.floatingTimetableScroll.style.maxHeight = `min(${size.maxHeight}rem, calc(100vh - 10rem))`;
+        }
+        const smaller = document.getElementById('floating-timetable-smaller');
+        const bigger = document.getElementById('floating-timetable-bigger');
+        if (smaller) smaller.disabled = index === 0;
+        if (bigger) bigger.disabled = index === FLOATING_TIMETABLE_SIZES.length - 1;
+    }
+
+    function stepFloatingTimetableSize(delta) {
+        const next = Math.min(
+            FLOATING_TIMETABLE_SIZES.length - 1,
+            Math.max(0, readFloatingTimetableSize() + delta)
+        );
+        try { localStorage.setItem(FLOATING_TIMETABLE_SIZE_KEY, String(next)); } catch { /* 忽略 */ }
+        applyFloatingTimetableSize();
     }
 
     function updateFloatingTimetableVisibility() {
