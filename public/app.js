@@ -306,6 +306,7 @@
             dept:       item.dept || '',
             required:   item.required || false,
             selCode:    item.selCode || '',
+            courseCode: item.courseCode || '',
         })) : [];
 
         const EXCLUDED_SOURCES = new Set(['converted_coursesd', 'data_json', 'opt_all_courses_with_experience']);
@@ -454,6 +455,7 @@
             dept:     item.dept?.trim() || '',
             required: Boolean(item.required),
             selCode:  item.selCode?.trim() || '',
+            courseCode: item.courseCode?.trim() || '',
         };
     }
 
@@ -902,7 +904,13 @@
                 ]
                     .join(' ')
                     .toLowerCase();
-                if (!tokens.every((token) => searchable.includes(token))) {
+                // 選課代碼與課程編碼要求完全相同，不做子字串比對：選課代碼是
+                // 四位數字，用包含比對的話打「1」就會命中一大半的課。
+                const codes = [course.selCode, course.courseCode]
+                    .map((code) => (code || '').toLowerCase())
+                    .filter(Boolean);
+                const matchesToken = (token) => searchable.includes(token) || codes.includes(token);
+                if (!tokens.every(matchesToken)) {
                     return false;
                 }
             }
