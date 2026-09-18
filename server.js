@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import compression from "compression";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -196,6 +197,11 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+// gzip 壓縮。必須掛在 express.static 之前才會生效——static 會直接把檔案送出並結束
+// 回應，排在它後面的中介層不會被執行。放在最前面同時讓 /api 的 JSON 回應一併受惠。
+// public/fcu_courses.json 實測 5.37MB → 0.54MB。
+app.use(compression());
 
 app.use(
   cors({
