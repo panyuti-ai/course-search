@@ -333,6 +333,17 @@
     // 不顯示：4086 筆裡有 54% 是「評價褒貶不一」等於沒講，而其餘的確定語氣
     // 正是最容易誤導選課判斷的部分。改為呈現學生自己講的原文摘要。
     const reviewIndex = new Map();
+    // 課程找不到精確心得時，才用這份索引提供「同一位老師、其他課程」的參考。
+    // 共同授課的心得無法判斷內容在說哪位老師，因此不放進教師索引。
+    const teacherReviewIndex = new Map();
+    const TEACHER_SIGNAL_RULES = [
+        { key: 'teacher-signal-positive', pattern: /多人正評|有人正評|老師人緣佳/ },
+        { key: 'teacher-signal-warning', pattern: /有人警告/ },
+        { key: 'teacher-signal-generous-grading', pattern: /給分寬鬆/ },
+        { key: 'teacher-signal-relaxed-course', pattern: /課程較輕鬆/ },
+        { key: 'teacher-signal-hard-course', pattern: /課程偏難/ },
+        { key: 'teacher-signal-fail-risk', pattern: /容易被當/ },
+    ];
 
     // 原始摘要夾雜兩種機器產生的句子，都不是學生講的話，去掉才看得到實際內容：
     //   「共 2 則留言，無明顯正負評傾向」——只講了則數，等於沒查（1834 筆有）
@@ -360,18 +371,32 @@
 
     function buildReviewIndex(rawReviews) {
         reviewIndex.clear();
+        teacherReviewIndex.clear();
         if (!Array.isArray(rawReviews)) return;
         rawReviews.forEach((item) => {
             const summary = cleanReviewSummary(item?.['整體評價']);
             if (summary.length < 6) return;
             const key = normalizeCourseNameForMatch(item.course);
             if (!key) return;
-            if (!reviewIndex.has(key)) reviewIndex.set(key, []);
-            reviewIndex.get(key).push({
-                teachers: new Set(splitTeacherNames(item.teacher)),
+            const teacherNames = splitTeacherNames(item.teacher);
+            const entry = {
+                course: toPlannerString(item.course).trim(),
+                courseKey: key,
+                teachers: new Set(teacherNames),
                 style: toPlannerString(item?.['上課方式']).trim(),
                 summary,
-            });
+            };
+            if (!reviewIndex.has(key)) reviewIndex.set(key, []);
+            reviewIndex.get(key).push(entry);
+
+            if (teacherNames.length !== 1) return;
+            const teacher = teacherNames[0];
+            if (!teacherReviewIndex.has(teacher)) teacherReviewIndex.set(teacher, []);
+            const teacherEntries = teacherReviewIndex.get(teacher);
+            const isDuplicate = teacherEntries.some((candidate) => (
+                candidate.courseKey === entry.courseKey && candidate.summary === entry.summary
+            ));
+            if (!isDuplicate) teacherEntries.push(entry);
         });
     }
 
@@ -392,6 +417,28 @@
         // 同一門課有多筆時取內容最長的：最短的幾乎都是「有考試」這種一句話。
         const best = matched.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
         return { style: best.style, summary: best.summary };
+    }
+
+    function findTeacherReviews(course) {
+        const currentCourseKey = normalizeCourseNameForMatch(course.course);
+        return splitTeacherNames(course.teacher)
+            .map((teacher) => {
+                const entries = (teacherReviewIndex.get(teacher) || [])
+                    .filter((entry) => entry.courseKey !== currentCourseKey);
+                if (!entries.length) return null;
+                const courseCount = new Set(entries.map((entry) => entry.courseKey)).size;
+                const signals = TEACHER_SIGNAL_RULES
+                    .map((rule, order) => ({
+                        key: rule.key,
+                        count: entries.filter((entry) => rule.pattern.test(entry.summary)).length,
+                        order,
+                    }))
+                    .filter((signal) => signal.count > 0)
+                    .sort((a, b) => b.count - a.count || a.order - b.order)
+                    .slice(0, 3);
+                return { teacher, entries, courseCount, signals };
+            })
+            .filter(Boolean);
     }
 
     function normalizeCourse(item, index) {
@@ -1267,7 +1314,7 @@
 
     function createCardStudentReview(course) {
         const found = findCourseReview(course);
-        if (!found) return null;
+        if (!found) return createCardTeacherReview(course);
 
         const box = document.createElement('div');
         box.className = 'flex flex-col gap-1 border-l-2 border-notion-border dark:border-dark-border pl-3 py-1';
@@ -1299,6 +1346,99 @@
         }
         box.appendChild(summary);
 
+        return box;
+    }
+
+    function createCardTeacherReview(course) {
+        const profiles = findTeacherReviews(course);
+        if (!profiles.length) return null;
+
+        const box = document.createElement('div');
+        box.className = 'flex flex-col gap-2 border-l-2 border-notion-border dark:border-dark-border pl-3 py-1';
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'text-left text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:text-black dark:hover:text-white transition-colors duration-100';
+        const closedLabel = profiles.length === 1
+            ? t('teacher-reviews-toggle', {
+                teacher: profiles[0].teacher,
+                n: profiles[0].courseCount,
+            })
+            : t('teacher-reviews-toggle-multiple', { n: profiles.length });
+        toggle.textContent = closedLabel;
+        toggle.setAttribute('aria-expanded', 'false');
+        box.appendChild(toggle);
+
+        const details = document.createElement('div');
+        details.className = 'hidden flex flex-col gap-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+
+        const heading = document.createElement('p');
+        heading.className = 'font-medium text-black dark:text-white';
+        heading.textContent = t('teacher-reviews-heading');
+        details.appendChild(heading);
+
+        const disclaimer = document.createElement('p');
+        disclaimer.className = 'leading-relaxed';
+        disclaimer.textContent = t('teacher-reviews-disclaimer');
+        details.appendChild(disclaimer);
+
+        profiles.forEach((profile) => {
+            const profileBox = document.createElement('div');
+            profileBox.className = 'flex flex-col gap-1.5 rounded-md bg-notion-bg-secondary dark:bg-dark-bg-secondary px-3 py-2';
+
+            if (profiles.length > 1) {
+                const teacherName = document.createElement('p');
+                teacherName.className = 'font-medium text-black dark:text-white';
+                teacherName.textContent = profile.teacher;
+                profileBox.appendChild(teacherName);
+            }
+
+            const source = document.createElement('p');
+            source.textContent = t('teacher-reviews-source', { n: profile.courseCount });
+            profileBox.appendChild(source);
+
+            if (profile.signals.length) {
+                const signals = document.createElement('p');
+                signals.textContent = t('teacher-reviews-signals', {
+                    signals: profile.signals.map((signal) => t(signal.key)).join(t('teacher-reviews-separator')),
+                });
+                profileBox.appendChild(signals);
+            }
+
+            profile.entries.forEach((entry) => {
+                const entryDetails = document.createElement('details');
+                entryDetails.className = 'rounded border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card px-2 py-1.5';
+
+                const entryHeading = document.createElement('summary');
+                entryHeading.className = 'cursor-pointer font-medium text-black dark:text-white';
+                entryHeading.textContent = entry.course;
+                entryDetails.appendChild(entryHeading);
+
+                if (entry.style) {
+                    const style = document.createElement('p');
+                    style.className = 'mt-1.5';
+                    style.textContent = t('reviews-style', { v: entry.style });
+                    entryDetails.appendChild(style);
+                }
+
+                const summary = document.createElement('p');
+                summary.className = 'mt-1 leading-relaxed';
+                summary.textContent = entry.summary;
+                entryDetails.appendChild(summary);
+                profileBox.appendChild(entryDetails);
+            });
+
+            details.appendChild(profileBox);
+        });
+
+        toggle.addEventListener('click', () => {
+            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+            toggle.textContent = isOpen ? closedLabel : t('teacher-reviews-collapse');
+            details.classList.toggle('hidden', isOpen);
+        });
+
+        box.appendChild(details);
         return box;
     }
 
