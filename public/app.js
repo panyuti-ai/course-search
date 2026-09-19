@@ -4055,7 +4055,7 @@
             });
         });
 
-        const selectedNames = new Set(selectedCourses.map((c) => toPlannerString(c?.course ?? c?.name)));
+        const uploadedNames = new Set(uploadedCourses.map((c) => toPlannerString(c?.course ?? c?.name)));
 
         const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
         const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -4108,18 +4108,26 @@
                     const colorIdx = courseColorMap.get(courseName) ?? 0;
                     const bg = TIMETABLE_COLORS[colorIdx];
                     const fg = TIMETABLE_TEXT_COLORS[colorIdx];
-                    const isSelected = selectedNames.has(courseName);
-                    const opacity = isSelected ? '1' : '0.55';
+                    const isOriginal = uploadedNames.has(courseName);
                     const escapedName = escapePlannerHtml(courseName);
                     const isRecent = Boolean(recentCourseName && courseName === recentCourseName);
                     const recentClass = isRecent ? ' is-recently-added' : '';
-                    const fixedClass = isSelected ? '' : ' is-fixed';
-                    const badge = isRecent && !recentBadgeRendered
-                        ? `<span class="planner-new-badge">${escapePlannerHtml(t('just-added'))}</span>`
-                        : '';
+                    const originalClass = isOriginal ? ' is-original' : '';
+                    const singlePeriodClass = span === 1 ? ' is-single-period' : '';
+                    let statusKind = 'added';
+                    let statusText = `✓ ${t('timetable-selected-legend')}`;
+                    if (isOriginal) {
+                        statusKind = 'original';
+                        statusText = `🔒 ${t('timetable-fixed-legend')}`;
+                    }
+                    if (isRecent && !recentBadgeRendered) {
+                        statusKind = 'new';
+                        statusText = `＋ ${t('just-added')}`;
+                    }
+                    const statusBadge = `<span class="planner-status-badge is-${statusKind}">${escapePlannerHtml(statusText)}</span>`;
                     if (isRecent) recentBadgeRendered = true;
                     const periodText = span === 1 ? `第 ${period} 節` : `第 ${period}–${period + span - 1} 節`;
-                    html += `<td rowspan="${span}" tabindex="${isRecent ? '0' : '-1'}" class="planner-calendar-course${fixedClass}${recentClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${escapedName}，${periodText}" style="--course-bg:${bg};--course-fg:${fg};--course-opacity:${opacity};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${badge}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
+                    html += `<td rowspan="${span}" tabindex="${isRecent ? '0' : '-1'}" class="planner-calendar-course${originalClass}${recentClass}${singlePeriodClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${statusText}，${escapedName}，${periodText}" style="--course-bg:${bg};--course-fg:${fg};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${statusBadge}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
                 } else {
                     const dayLabel = DAY_LABELS[DAYS.indexOf(day)];
                     const todayClass = day === today ? ' is-today' : '';
