@@ -199,6 +199,7 @@
         plannerTimetableLegend: document.getElementById('planner-timetable-legend'),
         floatingTimetable: document.getElementById('floating-timetable'),
         floatingTimetableTable: document.getElementById('floating-timetable-table'),
+        floatingTimetableScroll: document.getElementById('floating-timetable-scroll'),
         plannerChatBtn: document.getElementById('planner-chat-btn'),
         plannerChatPanel: document.getElementById('planner-chat-panel'),
         plannerChatClose: document.getElementById('planner-chat-close'),
@@ -306,6 +307,7 @@
             dept:       item.dept || '',
             required:   item.required || false,
             selCode:    item.selCode || '',
+            courseCode: item.courseCode || '',
         })) : [];
 
         const EXCLUDED_SOURCES = new Set(['converted_coursesd', 'data_json', 'opt_all_courses_with_experience']);
@@ -324,9 +326,8 @@
     }
 
     // ── 學生心得 ────────────────────────────────────────────────
-    // 這批心得是從網路蒐集來的，課程與教師的歸屬不保證正確，因此顯示時必須
-    // 說清楚我們實際知道什麼：課名與教師都對得上，才敢說是「這門課這位老師」
-    // 的心得；只有課名對得上時，明說是同名課程、教師不同。
+    // 這批心得是從網路蒐集來的，課程與教師的歸屬不保證正確，因此只在課名與
+    // 教師都對得上時才顯示——唯有那時才敢說這是「這門課這位老師」的心得。
     //
     // 原始資料另有「結論」欄位（「口碑很好，強烈推薦修課」之類的斷言），刻意
     // 不顯示：4086 筆裡有 54% 是「評價褒貶不一」等於沒講，而其餘的確定語氣
@@ -377,26 +378,20 @@
     // 回傳 { tier, style, summary } 或 null。tier 為 'exact'（課名與教師皆相符）
     // 或 'name-only'（只有課名相符）。同一層有多筆時取內容最長的一筆——最短的
     // 幾乎都是「有考試」這種一句話，資訊量最低。
+    // 只在課名與教師都對得上時才回傳，否則回 null。教學風格取決於教師而非
+    // 課名，同名不同師的心得對想查這位教師的人毫無用處：全校同時開「人力資源
+    // 管理」的王妙如與鄭孟育兩班並排在搜尋結果裡，把王妙如的心得掛到鄭孟育的
+    // 卡片上，只是把王妙如那張卡片已有的內容再印一次。
+    // 對不上就不顯示，卡片上的 Dcard 按鈕仍可讓使用者自行查證。
     function findCourseReview(course) {
         const candidates = reviewIndex.get(normalizeCourseNameForMatch(course.course));
         if (!candidates || !candidates.length) return null;
         const teachers = new Set(splitTeacherNames(course.teacher));
-        const exact = candidates.filter((r) => [...r.teachers].some((t) => teachers.has(t)));
-        const pool = exact.length ? exact : candidates;
-        const best = pool.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
-        // 教師對不上時，標題直接寫出心得實際講的是哪位老師。只說「教師不同」
-        // 仍會讓人把內文的讚美算到本課教師頭上（例：鄭孟育的人力資源管理，
-        // 心得誇的是另一位老師）。名單過長時只列前兩位。
-        const names = [...best.teachers];
-        const reviewTeacher = names.length > 2
-            ? t('reviews-teacher-more', { names: names.slice(0, 2).join('、'), n: names.length - 2 })
-            : names.join('、');
-        return {
-            tier: exact.length ? 'exact' : 'name-only',
-            style: best.style,
-            summary: best.summary,
-            reviewTeacher,
-        };
+        const matched = candidates.filter((r) => [...r.teachers].some((name) => teachers.has(name)));
+        if (!matched.length) return null;
+        // 同一門課有多筆時取內容最長的：最短的幾乎都是「有考試」這種一句話。
+        const best = matched.reduce((a, b) => (b.summary.length > a.summary.length ? b : a));
+        return { style: best.style, summary: best.summary };
     }
 
     function normalizeCourse(item, index) {
@@ -454,6 +449,7 @@
             dept:     item.dept?.trim() || '',
             required: Boolean(item.required),
             selCode:  item.selCode?.trim() || '',
+            courseCode: item.courseCode?.trim() || '',
         };
     }
 
@@ -638,6 +634,12 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
+
+        const smaller = document.getElementById('floating-timetable-smaller');
+        const bigger = document.getElementById('floating-timetable-bigger');
+        if (smaller) smaller.addEventListener('click', () => stepFloatingTimetableSize(-1));
+        if (bigger) bigger.addEventListener('click', () => stepFloatingTimetableSize(1));
+        applyFloatingTimetableSize();
 
         const floatingClose = document.getElementById('floating-timetable-close');
         if (floatingClose) {
@@ -902,7 +904,13 @@
                 ]
                     .join(' ')
                     .toLowerCase();
-                if (!tokens.every((token) => searchable.includes(token))) {
+                // 選課代碼與課程編碼要求完全相同，不做子字串比對：選課代碼是
+                // 四位數字，用包含比對的話打「1」就會命中一大半的課。
+                const codes = [course.selCode, course.courseCode]
+                    .map((code) => (code || '').toLowerCase())
+                    .filter(Boolean);
+                const matchesToken = (token) => searchable.includes(token) || codes.includes(token);
+                if (!tokens.every(matchesToken)) {
                     return false;
                 }
             }
@@ -1266,11 +1274,7 @@
 
         const heading = document.createElement('p');
         heading.className = 'text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary';
-        heading.textContent = found.tier === 'exact'
-            ? t('reviews-heading-exact')
-            : (found.reviewTeacher
-                ? t('reviews-heading-other-teacher', { teacher: found.reviewTeacher })
-                : t('reviews-heading-name-only'));
+        heading.textContent = t('reviews-heading-exact');
         box.appendChild(heading);
 
         if (found.style) {
@@ -4130,6 +4134,52 @@
             list.appendChild(card);
         });
         container.appendChild(list);
+    }
+
+    // 動態課表的三段大小。寬度用行內樣式而非 Tailwind class：CDN 版的 JIT
+    // 只掃得到原始碼裡出現過的 class，JS 後來加上去的不會產生對應樣式。
+    // 寬度另以 calc(100vw - 3rem) 封頂，免得在窄螢幕上撐出畫面。
+    const FLOATING_TIMETABLE_SIZES = [
+        { width: 18, maxHeight: 18 },
+        { width: 26, maxHeight: 24 },
+        { width: 34, maxHeight: 30 },
+    ];
+    const FLOATING_TIMETABLE_SIZE_KEY = 'floating_timetable_size';
+
+    // localStorage 在無痕模式或停用 cookie 時會丟例外，讀寫都要能失敗
+    function readFloatingTimetableSize() {
+        let raw = null;
+        try { raw = localStorage.getItem(FLOATING_TIMETABLE_SIZE_KEY); } catch { /* 忽略 */ }
+        // 沒存過時 raw 是 null，而 Number(null) 是 0——那是合法索引，會讓預設
+        // 變成最小尺寸而非中等。先確認真的讀到東西再轉數字。
+        if (typeof raw !== 'string' || raw === '') return 1;
+        const index = Number(raw);
+        if (!Number.isInteger(index) || index < 0 || index >= FLOATING_TIMETABLE_SIZES.length) return 1;
+        return index;
+    }
+
+    function applyFloatingTimetableSize() {
+        const panel = elements.floatingTimetable;
+        if (!panel) return;
+        const index = readFloatingTimetableSize();
+        const size = FLOATING_TIMETABLE_SIZES[index];
+        panel.style.width = `min(${size.width}rem, calc(100vw - 3rem))`;
+        if (elements.floatingTimetableScroll) {
+            elements.floatingTimetableScroll.style.maxHeight = `min(${size.maxHeight}rem, calc(100vh - 10rem))`;
+        }
+        const smaller = document.getElementById('floating-timetable-smaller');
+        const bigger = document.getElementById('floating-timetable-bigger');
+        if (smaller) smaller.disabled = index === 0;
+        if (bigger) bigger.disabled = index === FLOATING_TIMETABLE_SIZES.length - 1;
+    }
+
+    function stepFloatingTimetableSize(delta) {
+        const next = Math.min(
+            FLOATING_TIMETABLE_SIZES.length - 1,
+            Math.max(0, readFloatingTimetableSize() + delta)
+        );
+        try { localStorage.setItem(FLOATING_TIMETABLE_SIZE_KEY, String(next)); } catch { /* 忽略 */ }
+        applyFloatingTimetableSize();
     }
 
     function updateFloatingTimetableVisibility() {
