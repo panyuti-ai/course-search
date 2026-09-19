@@ -259,6 +259,106 @@ const chatRateLimiter = rateLimit({
   message: { error: "訊息傳送太快，請稍等一下再說。" },
 });
 
+// 課程卡片展開「評分方式」時才查詢逢甲公開教學大綱。每個學期＋選課代碼
+// 會在伺服器記憶體快取，避免同一門課被重複查詢，也避免列表一次打出大量請求。
+const courseGradeRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "評分方式查詢過於頻繁，請稍後再試。" },
+});
+const FCU_COURSE_OUTLINE_URL = "https://coursesearch02.fcu.edu.tw/CourseOutline.aspx";
+const FCU_COURSE_DETAIL_URL = "https://ilearntools.fcu.edu.tw/W320104/W320104_syllabus.aspx/GetCourseDetail";
+const COURSE_GRADE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const courseGradeCache = new Map();
+
+function cleanOfficialText(value) {
+  return String(value ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchFcuGradeRules(semester, selCode) {
+  const [year, sms] = semester.split("-");
+  const courseId = `${year}${sms}${selCode}`;
+  const outlineUrl = new URL(FCU_COURSE_OUTLINE_URL);
+  outlineUrl.searchParams.set("lang", "cht");
+  outlineUrl.searchParams.set("courseid", courseId);
+
+  const outlineResponse = await fetchWithTimeout(outlineUrl, { redirect: "follow" });
+  if (!outlineResponse.ok) {
+    throw new Error(`FCU outline HTTP ${outlineResponse.status}`);
+  }
+  // 消耗回應內容，讓連線可以正常回收；真正需要的是導向後 URL 裡的短效 token。
+  await outlineResponse.text();
+  const accessToken = new URL(outlineResponse.url).searchParams.get("token");
+  if (!accessToken) throw new Error("FCU outline token missing");
+
+  const detailResponse = await fetchWithTimeout(FCU_COURSE_DETAIL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ access_token: accessToken }),
+  });
+  if (!detailResponse.ok) {
+    throw new Error(`FCU course detail HTTP ${detailResponse.status}`);
+  }
+
+  const payload = await detailResponse.json();
+  let detail = payload?.d ?? payload;
+  if (typeof detail === "string") detail = JSON.parse(detail);
+  const rawRules = Array.isArray(detail?.gradeRules) ? detail.gradeRules : [];
+
+  return rawRules
+    .map((rule) => ({
+      name: cleanOfficialText(rule?.evalb_name),
+      percentage: Number(rule?.score_rate),
+    }))
+    .filter((rule) => rule.name && Number.isFinite(rule.percentage) && rule.percentage >= 0 && rule.percentage <= 100);
+}
+
+app.get("/api/course-grade-rules", courseGradeRateLimiter, async (req, res) => {
+  const semester = String(req.query.semester || "").trim();
+  const selCode = String(req.query.selCode || "").trim();
+  if (!/^\d{3}-[1-4]$/.test(semester) || !/^\d{4}$/.test(selCode)) {
+    return res.status(400).json({ error: "學期或選課代碼格式錯誤。" });
+  }
+
+  const cacheKey = `${semester}|${selCode}`;
+  const cached = courseGradeCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < COURSE_GRADE_CACHE_TTL_MS) {
+    res.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=21600");
+    return res.json({ items: cached.items, cached: true });
+  }
+
+  try {
+    const items = await fetchFcuGradeRules(semester, selCode);
+    courseGradeCache.set(cacheKey, { items, fetchedAt: Date.now() });
+    res.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=21600");
+    return res.json({ items, cached: false });
+  } catch (error) {
+    console.error(`[course-grade-rules] ${cacheKey}:`, error.message);
+    return res.status(502).json({ error: "暫時無法取得逢甲官方評分方式。" });
+  }
+});
+
 // JWT 驗證 middleware
 function requireAuth(req, res, next) {
   const auth = req.headers.authorization;
