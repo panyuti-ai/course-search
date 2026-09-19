@@ -448,9 +448,19 @@
     vertical-align: top;
     background: var(--course-bg);
     box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08), inset 3px 0 0 currentColor;
-    opacity: var(--course-opacity);
     overflow: hidden;
     transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.planner-calendar-course.is-original {
+    color: #605e5c;
+    background: color-mix(in srgb, var(--course-bg) 24%, #f7f7f5);
+    border: 1px dashed #aaa9a5;
+    box-shadow: none;
+}
+.dark .planner-calendar-course.is-original {
+    color: #c7c6c3;
+    background: color-mix(in srgb, var(--course-bg) 18%, #2b2b2a);
+    border-color: #686765;
 }
 .planner-calendar-course:hover {
     transform: translateY(-1px);
@@ -481,18 +491,50 @@
     font-weight: 500;
     opacity: 0.72;
 }
-.planner-new-badge {
+.planner-status-badge {
     display: inline-flex;
     align-items: center;
-    min-height: 19px;
-    padding: 1px 7px;
+    min-height: 18px;
+    padding: 1px 6px;
     border-radius: 999px;
-    color: #fff;
-    background: #2eaadc;
-    box-shadow: 0 2px 7px rgba(46, 170, 220, 0.28);
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
+}
+.planner-status-badge.is-original {
+    color: #605e5c;
+    background: rgba(120, 119, 116, 0.13);
+    border: 1px solid rgba(120, 119, 116, 0.3);
+}
+.dark .planner-status-badge.is-original {
+    color: #d3d2cf;
+    background: rgba(185, 184, 180, 0.12);
+    border-color: rgba(185, 184, 180, 0.24);
+}
+.planner-status-badge.is-added {
+    color: #fff;
+    background: #137c9e;
+    box-shadow: 0 2px 6px rgba(19, 124, 158, 0.22);
+}
+.planner-status-badge.is-new {
+    color: #fff;
+    background: #2eaadc;
+    box-shadow: 0 2px 7px rgba(46, 170, 220, 0.3);
+}
+.planner-calendar-course.is-single-period .planner-course-block {
+    flex-flow: row wrap;
+    align-content: center;
+    justify-content: flex-start;
+    gap: 3px 6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+.planner-calendar-course.is-single-period .planner-course-name {
+    flex: 1 1 70px;
+}
+.planner-calendar-course.is-single-period .planner-course-time {
+    flex-basis: 100%;
 }
 @keyframes plannerCourseAdded {
     0% { transform: scale(0.93); box-shadow: 0 0 0 0 rgba(46, 170, 220, 0.52), inset 3px 0 0 currentColor; }
@@ -537,7 +579,7 @@
     font-size: 0.7rem;
 }
 .planner-calendar--compact .planner-course-time,
-.planner-calendar--compact .planner-new-badge {
+.planner-calendar--compact .planner-status-badge {
     display: none;
 }
 @media (max-width: 640px) {
