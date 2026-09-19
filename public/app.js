@@ -1237,13 +1237,13 @@
         const headerActions = document.createElement('div');
         headerActions.className = 'flex shrink-0 items-center gap-1';
 
-        const shareButton = document.createElement('button');
-        shareButton.type = 'button';
-        shareButton.className = 'h-8 w-8 rounded-md text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
-        shareButton.textContent = '↗';
-        shareButton.title = t('share');
-        shareButton.setAttribute('aria-label', t('share'));
-        shareButton.addEventListener('click', () => shareCourse(course));
+        const copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
+        copyButton.textContent = `▣ ${t('copy')}`;
+        copyButton.title = t('copy-course-info');
+        copyButton.setAttribute('aria-label', t('copy-course-info'));
+        copyButton.addEventListener('click', () => copyCourseInfo(course));
 
         const favoriteButton = document.createElement('button');
         favoriteButton.type = 'button';
@@ -1264,7 +1264,7 @@
             );
         });
 
-        headerActions.append(shareButton, favoriteButton);
+        headerActions.append(copyButton, favoriteButton);
         titleRow.append(title, headerActions);
         header.appendChild(titleRow);
 
@@ -1890,7 +1890,7 @@
         return { dismiss };
     }
 
-    function shareCourse(course) {
+    function copyCourseInfo(course) {
         const isDuplicate = course.difficulty !== null && String(course.difficulty) === String(course.score);
         const scoreLine = isDuplicate
             ? `${t('score')}：${course.score || '－'}`
