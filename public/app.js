@@ -165,9 +165,12 @@
     };
 
     const elements = {
+        searchModeTab: document.getElementById('search-mode-tab'),
+        plannerModeTab: document.getElementById('planner-mode-tab'),
+        searchView: document.getElementById('search-view'),
+        plannerView: document.getElementById('planner-view'),
         searchForm: document.getElementById('search-form'),
         courseInput: document.getElementById('course-input'),
-        userContext: document.getElementById('user-context'),
         sortSelect: document.getElementById('sort-select'),
         resultsSummary: document.getElementById('results-summary'),
         searchResults: document.getElementById('search-results'),
@@ -190,6 +193,9 @@
         themeToggle: document.getElementById('theme-toggle'),
         backToTop: document.getElementById('back-to-top'),
         plannerFile: document.getElementById('planner-file'),
+        plannerContext: document.getElementById('planner-context'),
+        plannerSetupStep: document.getElementById('planner-setup-step'),
+        plannerResultsStep: document.getElementById('planner-results-step'),
         plannerTargetCredits: document.getElementById('planner-target-credits'),
         plannerGenerate: document.getElementById('planner-generate'),
         plannerReset: document.getElementById('planner-reset'),
@@ -213,7 +219,17 @@
         plannerChatCoach: document.getElementById('planner-chat-coach'),
         plannerChatCoachOk: document.getElementById('planner-chat-coach-ok'),
         plannerChatCoachNever: document.getElementById('planner-chat-coach-never'),
+        aiEvaluationModal: document.getElementById('ai-evaluation-modal'),
+        aiEvaluationOverlay: document.getElementById('ai-evaluation-overlay'),
+        aiEvaluationClose: document.getElementById('ai-evaluation-close'),
+        aiEvaluationCancel: document.getElementById('ai-evaluation-cancel'),
+        aiEvaluationCourse: document.getElementById('ai-evaluation-course'),
+        aiEvaluationResult: document.getElementById('ai-evaluation-result'),
+        aiEvaluationSubmit: document.getElementById('ai-evaluation-submit'),
+        aiContext: document.getElementById('ai-context'),
     };
+    let activeView = 'search';
+    let activeAiCourse = null;
     const plannerAddButtonUpdaters = new Set();
     let plannerUpdatedListenerBound = false;
 
@@ -247,6 +263,7 @@
             loadFavorites();
             populateFilters();
             attachEvents();
+            setActiveView('search');
             initializePlannerSection();
             restoreStateFromURL();
             runSearch({ force: true });
@@ -591,6 +608,84 @@
         localStorage.setItem(STORAGE_KEY_THEME, isDark ? 'dark' : 'light');
     }
 
+    function setActiveView(view, { focusTab = false, scroll = false } = {}) {
+        const nextView = view === 'planner' ? 'planner' : 'search';
+        activeView = nextView;
+        const isSearch = nextView === 'search';
+
+        elements.searchView?.classList.toggle('hidden', !isSearch);
+        elements.plannerView?.classList.toggle('hidden', isSearch);
+        elements.searchModeTab?.classList.toggle('is-active', isSearch);
+        elements.plannerModeTab?.classList.toggle('is-active', !isSearch);
+        elements.searchModeTab?.setAttribute('aria-selected', String(isSearch));
+        elements.plannerModeTab?.setAttribute('aria-selected', String(!isSearch));
+        elements.searchModeTab?.setAttribute('tabindex', isSearch ? '0' : '-1');
+        elements.plannerModeTab?.setAttribute('tabindex', isSearch ? '-1' : '0');
+
+        updatePlannerChatVisibility();
+        updateFloatingTimetableVisibility();
+
+        const activeTab = isSearch ? elements.searchModeTab : elements.plannerModeTab;
+        const activePanel = isSearch ? elements.searchView : elements.plannerView;
+        if (focusTab) activeTab?.focus();
+        if (scroll) activePanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function syncPlannerProgressiveDisclosure() {
+        const hasUpload = Array.isArray(state.planner.uploadedCourses) && state.planner.uploadedCourses.length > 0;
+        elements.plannerSetupStep?.classList.toggle('hidden', !hasUpload);
+        elements.plannerResultsStep?.classList.toggle('hidden', !state.planner.hasPlan);
+    }
+
+    let aiModalTrigger = null;
+
+    function openAiEvaluation(course, trigger) {
+        if (!course || !elements.aiEvaluationModal) return;
+        activeAiCourse = course;
+        aiModalTrigger = trigger || null;
+        if (elements.aiEvaluationCourse) {
+            const teacher = course.teacher ? ` · ${course.teacher}` : '';
+            elements.aiEvaluationCourse.textContent = `${course.course}${teacher}`;
+        }
+        if (elements.aiEvaluationResult) {
+            elements.aiEvaluationResult.textContent = '';
+            elements.aiEvaluationResult.classList.add('hidden');
+            elements.aiEvaluationResult.classList.remove('text-notion-red', 'text-red-500');
+        }
+        if (elements.aiContext && !elements.aiContext.value) {
+            elements.aiContext.value = localStorage.getItem('course-search:ai-context') || '';
+        }
+        elements.aiEvaluationModal.classList.remove('hidden');
+        elements.aiEvaluationModal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        requestAnimationFrame(() => elements.aiContext?.focus());
+    }
+
+    function closeAiEvaluation() {
+        if (!elements.aiEvaluationModal || elements.aiEvaluationModal.classList.contains('hidden')) return;
+        elements.aiEvaluationModal.classList.add('hidden');
+        elements.aiEvaluationModal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        activeAiCourse = null;
+        aiModalTrigger?.focus();
+        aiModalTrigger = null;
+    }
+
+    async function submitAiEvaluation() {
+        const context = elements.aiContext?.value?.trim() || '';
+        if (!context) {
+            if (elements.aiEvaluationResult) {
+                elements.aiEvaluationResult.textContent = t('ai-fill-bg');
+                elements.aiEvaluationResult.classList.remove('hidden');
+                elements.aiEvaluationResult.classList.add('text-notion-red');
+            }
+            elements.aiContext?.focus();
+            return;
+        }
+        localStorage.setItem('course-search:ai-context', context);
+        await performAnalysis(activeAiCourse, elements.aiEvaluationResult, elements.aiEvaluationSubmit, context);
+    }
+
     async function loadFavorites() {
         state.favorites.clear();
         try {
@@ -612,6 +707,21 @@
     }
 
     function attachEvents() {
+        elements.searchModeTab?.addEventListener('click', () => setActiveView('search'));
+        elements.plannerModeTab?.addEventListener('click', () => setActiveView('planner'));
+        [elements.searchModeTab, elements.plannerModeTab].forEach((tab) => {
+            tab?.addEventListener('keydown', (event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                setActiveView(activeView === 'search' ? 'planner' : 'search', { focusTab: true });
+            });
+        });
+
+        elements.aiEvaluationOverlay?.addEventListener('click', closeAiEvaluation);
+        elements.aiEvaluationClose?.addEventListener('click', closeAiEvaluation);
+        elements.aiEvaluationCancel?.addEventListener('click', closeAiEvaluation);
+        elements.aiEvaluationSubmit?.addEventListener('click', submitAiEvaluation);
+
         elements.searchForm.addEventListener('submit', (event) => {
             event.preventDefault();
             runSearch({ force: true, scrollToResults: true });
@@ -649,7 +759,9 @@
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
-                if (!elements.favoritesPanel.classList.contains('translate-x-full')) {
+                if (elements.aiEvaluationModal && !elements.aiEvaluationModal.classList.contains('hidden')) {
+                    closeAiEvaluation();
+                } else if (!elements.favoritesPanel.classList.contains('translate-x-full')) {
                     closeFavoritesPanel();
                 } else {
                     hideSuggestions();
@@ -1832,15 +1944,12 @@
         const actionsRow = document.createElement('div');
         actionsRow.className = 'flex gap-1.5';
 
-        const aiResult = document.createElement('div');
-        aiResult.className = 'hidden px-3 py-2.5 rounded-md bg-notion-bg-secondary dark:bg-dark-bg-secondary border border-notion-border dark:border-dark-border text-xs text-notion-text dark:text-dark-text leading-relaxed';
-
         const aiButton = document.createElement('button');
         aiButton.type = 'button';
         aiButton.className = 'flex-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-notion-accent text-white hover:bg-[#2899c8] transition-colors duration-100';
         aiButton.textContent = t('ai-evaluate');
         aiButton.addEventListener('click', () => {
-            performAnalysis(course, aiResult, aiButton);
+            openAiEvaluation(course, aiButton);
         });
 
         // 教師欄位可能是一長串共同授課的名單（例如專題研究有 20 位）。
@@ -1973,6 +2082,8 @@
         addToPlanBtn.addEventListener('click', () => {
             if (!hasPdfUploaded()) {
                 showToast(t('please-upload-pdf'), 'error');
+                setActiveView('planner', { scroll: true });
+                setTimeout(() => document.getElementById('planner-file-btn')?.focus(), 350);
                 return;
             }
 
@@ -2022,7 +2133,7 @@
         });
 
         addToPlanRow.appendChild(addToPlanBtn);
-        actions.append(actionsRow, addToPlanRow, aiResult);
+        actions.append(actionsRow, addToPlanRow);
         return actions;
     }
 
@@ -2281,6 +2392,7 @@
             state.planner.pool = built.pool;
             state.planner.hasPlan = true;
             renderPlanner();
+            setActiveView('planner');
             // 捲動到排課區塊
             elements.plannerSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
@@ -2351,6 +2463,7 @@
             showToast(error.message || t('pdf-read-failed'), 'error');
         } finally {
             updatePlannerGenerateState();
+            syncPlannerProgressiveDisclosure();
             if (fileButton) {
                 fileButton.disabled = false;
                 fileButton.textContent = originalButtonText;
@@ -3262,11 +3375,11 @@
             return;
         }
 
-        const userContext = elements.userContext?.value?.trim() || '';
+        const userContext = elements.plannerContext?.value?.trim() || '';
         if (!userContext) {
             showToast(t('fill-bg-first'), 'error');
-            elements.userContext?.focus();
-            elements.userContext?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            elements.plannerContext?.focus();
+            elements.plannerContext?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
@@ -3666,7 +3779,7 @@
         const targetCredits = state.planner.targetCredits;
         const hardCap = Math.min(targetCredits + 1, 30);
 
-        const userContext = elements.userContext?.value?.trim() || '';
+        const userContext = elements.plannerContext?.value?.trim() || '';
         const constraints = parsePlannerConstraints(userContext);
         const hasConstraints = constraints.blockedDays.size || constraints.allowedDays || constraints.maxSlotsPerDay !== null;
 
@@ -3960,6 +4073,7 @@
 
     function renderPlanner() {
         if (!elements.plannerSummary || !elements.plannerSelectedList || !elements.plannerCandidateList) return;
+        syncPlannerProgressiveDisclosure();
         document.dispatchEvent(new CustomEvent('planner-updated'));
         updatePlannerChatVisibility();
 
@@ -4834,6 +4948,10 @@
         const floating = elements.floatingTimetable;
         const wrap = elements.plannerTimetableWrap;
         if (!floating || !wrap) return;
+        if (activeView !== 'planner') {
+            floating.classList.add('hidden');
+            return;
+        }
         // 窄螢幕放不下兩個浮動視窗，聊天展開時讓動態課表先退場
         if (state.plannerChat.open && window.innerWidth < 640) {
             floating.classList.add('hidden');
@@ -5017,7 +5135,7 @@
     function updatePlannerChatVisibility() {
         const btn = elements.plannerChatBtn;
         if (!btn) return;
-        const hasPlan = state.planner.hasPlan && state.planner.selected.size > 0;
+        const hasPlan = activeView === 'planner' && state.planner.hasPlan && state.planner.selected.size > 0;
         btn.classList.toggle('hidden', !hasPlan);
         if (!hasPlan) {
             hidePlannerChatHint();
@@ -5093,7 +5211,7 @@
 
         return {
             targetCredits: state.planner.targetCredits,
-            userContext: elements.userContext?.value?.trim() || '',
+            userContext: elements.plannerContext?.value?.trim() || '',
             selected: Array.from(state.planner.selected.values()).map(toPlannerChatCourse),
             candidates
         };
@@ -5506,7 +5624,7 @@
     }
 
     function buildPlannerUserContextTokens() {
-        const raw = (elements.userContext?.value || '').toLowerCase();
+        const raw = (elements.plannerContext?.value || '').toLowerCase();
         return raw.split(/[\s,，、;/|]+/).map((t) => t.trim()).filter((t) => t.length >= 2);
     }
 
@@ -5593,7 +5711,7 @@
     function buildPlannerProfileTokens() {
         const tokens = new Set();
         const raw = [
-            elements.userContext?.value || '',
+            elements.plannerContext?.value || '',
             elements.courseInput?.value || '',
             ...Array.from(state.activeTagFilters),
             ...Array.from(state.favorites.values()).slice(0, 12).map((course) => course.course)
@@ -5937,18 +6055,8 @@
         return Number.isFinite(numeric) ? numeric : null;
     }
 
-    async function performAnalysis(course, output, button) {
-        const context = elements.userContext.value.trim();
-        if (!context) {
-            output.textContent = t('ai-fill-bg');
-            output.classList.remove('hidden');
-            output.classList.add('text-notion-red');
-            // 欄位旁本來就有「填寫後才能使用 AI 評估」的提示，但它在頁面上方，
-            // 使用者按到卡片裡的按鈕時早已看不到。直接把他帶過去，省得自己找。
-            elements.userContext?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => elements.userContext?.focus({ preventScroll: true }), 300);
-            return;
-        }
+    async function performAnalysis(course, output, button, context) {
+        if (!course || !output || !button || !context) return;
 
         output.classList.remove('hidden', 'text-notion-red');
         output.textContent = t('ai-evaluating');

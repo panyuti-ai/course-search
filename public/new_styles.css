@@ -2,6 +2,92 @@
    Notion-style Design System
    ============================================= */
 
+/* ── Primary flow switcher ── */
+.mode-switcher {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid #e3e2de;
+    border-radius: 0.75rem;
+    background: #f7f7f5;
+}
+.dark .mode-switcher {
+    border-color: #333;
+    background: #202020;
+}
+.mode-switcher-tab {
+    min-width: 8rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.55rem;
+    color: #787774;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dark .mode-switcher-tab {
+    color: rgba(255, 255, 255, 0.58);
+}
+.mode-switcher-tab:hover,
+.mode-switcher-tab:focus-visible {
+    color: #37352f;
+    background: rgba(255, 255, 255, 0.72);
+}
+.dark .mode-switcher-tab:hover,
+.dark .mode-switcher-tab:focus-visible {
+    color: rgba(255, 255, 255, 0.88);
+    background: #2a2a2a;
+}
+.mode-switcher-tab.is-active {
+    color: #2374ab;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+.dark .mode-switcher-tab.is-active {
+    color: #66c6e8;
+    background: #2a2a2a;
+}
+
+/* ── Planner progressive steps ── */
+.planner-progress-step {
+    padding: 1rem;
+    border: 1px solid #e3e2de;
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.62);
+}
+.dark .planner-progress-step {
+    border-color: #333;
+    background: rgba(25, 25, 25, 0.48);
+}
+.planner-step-number {
+    display: inline-flex;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #d3edf6;
+    color: #2374ab;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.dark .planner-step-number {
+    background: rgba(46, 170, 220, 0.18);
+    color: #66c6e8;
+}
+
+@media (max-width: 480px) {
+    .mode-switcher {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .mode-switcher-tab {
+        min-width: 0;
+        padding-inline: 0.75rem;
+    }
+}
+
 /* ── Animation 1/3: Card staggered fade-in ── */
 @keyframes cardFadeIn {
     0%   { opacity: 0; transform: translateY(8px); }
