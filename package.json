@@ -7,7 +7,8 @@
     "start": "node server.js",
     "merge-data": "node scripts/mergeCourses.js",
     "scrape-fcu": "node scripts/scrapeFcu.js",
-    "crawl-dcard": "node scripts/crawl-dcard.mjs"
+    "crawl-dcard": "node scripts/crawl-dcard.mjs",
+    "attach-review-sources": "node scripts/attach-review-sources.mjs"
   },
   "keywords": [],
   "author": "",

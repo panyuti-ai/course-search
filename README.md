@@ -120,6 +120,26 @@ AI 分析課程是否適合修。
 { "username": "student_id", "password": "password" }
 ```
 
+## 更新 Dcard 心得與原文來源
+
+教師的其他課程心得會優先顯示可讀摘要；資料不足時，前端會提供已填好課名與教師的 Dcard 搜尋。若要讓使用者直接開啟原始文章：
+
+1. 設定 `DCARD_COOKIE` 後抓取公開文章索引：
+
+   ```bash
+   npm run crawl-dcard
+   ```
+
+2. 將文章網址、標題與公開互動數掛回心得資料：
+
+   ```bash
+   npm run attach-review-sources
+   ```
+
+3. 檢查 `public/course_reviews.json` 的差異後再提交。
+
+`scripts/dcard_raw.json` 保持在 `.gitignore` 中，不會把完整文章與留言發布到前端；前端資料只保留最多五筆原文連結與必要的來源資訊。
+
 ## 安全注意事項
 
 - **永遠不要**把 API Key 寫在前端或提交到版本控制
