@@ -261,6 +261,20 @@
             </div>
         </section>
 
+        <!-- Search-side timetable: appears once a PDF or planned course exists. -->
+        <section id="search-timetable-wrap" class="hidden planner-calendar-panel scroll-mt-6" aria-labelledby="search-timetable-title">
+            <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+                <div>
+                    <h2 id="search-timetable-title" class="text-sm font-semibold text-notion-text dark:text-dark-text" data-i18n-text="timetable-label">動態課表</h2>
+                    <p class="mt-0.5 text-xs text-notion-text-secondary dark:text-dark-text-secondary" data-i18n-text="timetable-helper">點空白時段即可找能加入的課</p>
+                </div>
+                <span id="search-timetable-legend" class="flex flex-wrap items-center justify-end gap-2 text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
+            </div>
+            <div class="planner-calendar-scroll overflow-x-auto">
+                <table id="search-timetable" class="planner-calendar w-full text-xs border-separate select-none"></table>
+            </div>
+        </section>
+
         <!-- Results Section -->
         <section class="w-full pb-16">
             <div id="results-summary" class="hidden mb-4 text-sm text-notion-text-secondary dark:text-dark-text-secondary"></div>
