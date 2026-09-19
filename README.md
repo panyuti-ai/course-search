@@ -112,6 +112,25 @@ AI 分析課程是否適合修。
 { "userContext": "我是資工系大二，想加強演算法與資料庫" }
 ```
 
+### `GET /api/course-grade-rules`
+
+依學期與選課代碼，從逢甲公開教學大綱取得評分項目與百分比。伺服器會快取結果，
+課程卡片只在使用者展開「評分方式」時查詢。
+
+```text
+/api/course-grade-rules?semester=115-1&selCode=0870
+```
+
+```json
+{
+  "items": [
+    { "name": "期中考", "percentage": 30 },
+    { "name": "課堂討論參與", "percentage": 40 }
+  ],
+  "cached": false
+}
+```
+
 ### `POST /api/auth/login`
 
 **目前為假 endpoint**，之後會替換成逢甲大學 NID OAuth。

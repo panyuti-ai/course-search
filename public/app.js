@@ -160,7 +160,8 @@
             open: false,
             sending: false,
             messages: []
-        }
+        },
+        courseGradeRules: new Map()
     };
 
     const elements = {
@@ -295,7 +296,8 @@
             course:     item.course || '',
             teacher:    item.teacher || '',
             credits:    item.credits,
-            review:     item.note || '',
+            review:     '',
+            officialNote: item.note || '',
             experience: '',
             score:      '',
             difficulty: null,
@@ -305,8 +307,11 @@
             source:     'fcu_scrape',
             // pass through times so planner can use them
             times:      item.times || [],
+            rooms:      item.rooms || [],
             dept:       item.dept || '',
             required:   item.required || false,
+            enrolled:   item.enrolled,
+            capacity:   item.capacity,
             selCode:    item.selCode || '',
             courseCode: item.courseCode || '',
         })) : [];
@@ -519,9 +524,13 @@
             matchCorpus,
             // preserve planner-relevant fields from fcu_scrape entries
             times:    Array.isArray(item.times) ? item.times : [],
+            rooms:    Array.isArray(item.rooms) ? item.rooms.filter(Boolean).map((room) => String(room).trim()) : [],
             credits:  item.credits != null ? Number(item.credits) : null,
             dept:     item.dept?.trim() || '',
             required: Boolean(item.required),
+            enrolled: item.enrolled != null && Number.isFinite(Number(item.enrolled)) ? Number(item.enrolled) : null,
+            capacity: item.capacity != null && Number.isFinite(Number(item.capacity)) ? Number(item.capacity) : null,
+            officialNote: item.officialNote?.trim() || '',
             selCode:  item.selCode?.trim() || '',
             courseCode: item.courseCode?.trim() || '',
         };
@@ -1197,6 +1206,12 @@
         const stats = createCardStats(course);
         if (stats) card.appendChild(stats);
 
+        const officialNote = createCardOfficialNote(course);
+        if (officialNote) card.appendChild(officialNote);
+
+        const gradeRules = createCardGradeRules(course);
+        if (gradeRules) card.appendChild(gradeRules);
+
         if (course.review) {
             card.appendChild(createCardReview(course));
         }
@@ -1293,6 +1308,16 @@
         const sourceBadge = document.createElement('span');
         sourceBadge.className = 'notion-tag bg-notion-bg-hover dark:bg-dark-border text-black dark:text-white';
         sourceBadge.textContent = course.sourceLabel;
+
+        if (course.sourceKey === 'fcu_scrape') {
+            const requirementBadge = document.createElement('span');
+            requirementBadge.className = course.required
+                ? 'course-requirement-badge course-requirement-required'
+                : 'course-requirement-badge course-requirement-elective';
+            requirementBadge.textContent = course.required ? t('required-course') : t('elective-course');
+            metaRow.appendChild(requirementBadge);
+        }
+
         metaRow.appendChild(sourceBadge);
 
         header.appendChild(metaRow);
@@ -1330,13 +1355,169 @@
 
     function createCardStats(course) {
         const timesStr = formatCourseTimes(course.times);
-        if (!timesStr) return null;
+        const roomsStr = Array.isArray(course.rooms) ? course.rooms.filter(Boolean).join('、') : '';
+        const hasEnrollment = Number.isFinite(course.enrolled) && Number.isFinite(course.capacity);
+        if (!timesStr && !roomsStr && !hasEnrollment) return null;
 
-        const stats = document.createElement('div');
-        stats.className = 'flex flex-wrap gap-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
-        stats.appendChild(createStatLine(t('time-slot'), timesStr));
+        const stats = document.createElement('section');
+        stats.className = 'course-official-facts';
+        stats.setAttribute('aria-label', t('official-course-info'));
+
+        if (timesStr || roomsStr) {
+            const scheduleRow = document.createElement('div');
+            scheduleRow.className = 'course-official-row';
+            if (timesStr) scheduleRow.appendChild(createOfficialFact(t('time-slot'), timesStr));
+            if (roomsStr) scheduleRow.appendChild(createOfficialFact(t('classroom'), roomsStr));
+            stats.appendChild(scheduleRow);
+        }
+
+        if (hasEnrollment) {
+            const enrollmentRow = document.createElement('div');
+            enrollmentRow.className = 'course-official-row course-enrollment-row';
+            const hasPublishedCapacity = course.capacity > 0;
+            const enrollment = createOfficialFact(
+                t('enrollment'),
+                hasPublishedCapacity
+                    ? t('enrollment-count', { enrolled: course.enrolled, capacity: course.capacity })
+                    : t('enrollment-count-unknown', { enrolled: course.enrolled })
+            );
+            enrollmentRow.appendChild(enrollment);
+
+            const remaining = course.capacity - course.enrolled;
+            const status = document.createElement('span');
+            status.className = !hasPublishedCapacity
+                ? 'course-seat-status course-seat-unknown'
+                : remaining > 0
+                    ? 'course-seat-status course-seat-open'
+                    : 'course-seat-status course-seat-full';
+            status.textContent = !hasPublishedCapacity
+                ? t('seats-unknown')
+                : remaining > 0
+                    ? t('seats-open', { n: remaining })
+                    : t('seats-full');
+            enrollmentRow.appendChild(status);
+            stats.appendChild(enrollmentRow);
+        }
 
         return stats;
+    }
+
+    function createOfficialFact(label, value) {
+        const fact = document.createElement('div');
+        fact.className = 'course-official-fact';
+        const labelNode = document.createElement('span');
+        labelNode.className = 'course-official-label';
+        labelNode.textContent = label;
+        const valueNode = document.createElement('span');
+        valueNode.className = 'course-official-value';
+        valueNode.textContent = value;
+        fact.append(labelNode, valueNode);
+        return fact;
+    }
+
+    function createCardOfficialNote(course) {
+        if (!course.officialNote) return null;
+        const note = document.createElement('div');
+        note.className = 'course-official-note';
+        const label = document.createElement('span');
+        label.className = 'course-official-note-label';
+        label.textContent = t('official-note');
+        const text = document.createElement('span');
+        text.className = 'course-official-note-text';
+        text.textContent = course.officialNote;
+        note.append(label, text);
+        return note;
+    }
+
+    function createCardGradeRules(course) {
+        if (course.sourceKey !== 'fcu_scrape' || !course.selCode || !/^\d{3}-[1-4]$/.test(course.semester)) {
+            return null;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'course-grade-rules';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'course-grade-toggle';
+        toggle.setAttribute('aria-expanded', 'false');
+
+        const label = document.createElement('span');
+        label.className = 'course-grade-toggle-label';
+        label.textContent = t('grading-method');
+        const action = document.createElement('span');
+        action.className = 'course-grade-toggle-action';
+        action.textContent = `${t('view-grading')} ↓`;
+        toggle.append(label, action);
+
+        const content = document.createElement('div');
+        content.className = 'course-grade-content hidden';
+        const cacheKey = `${course.semester}|${course.selCode}`;
+        let loading = false;
+
+        function renderMessage(message, isError = false) {
+            content.replaceChildren();
+            const text = document.createElement('p');
+            text.className = isError ? 'course-grade-message course-grade-error' : 'course-grade-message';
+            text.textContent = message;
+            content.appendChild(text);
+        }
+
+        function renderRules(items) {
+            content.replaceChildren();
+            if (!items.length) {
+                renderMessage(t('grading-empty'));
+                return;
+            }
+            items.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'course-grade-item';
+                const name = document.createElement('span');
+                name.className = 'course-grade-name';
+                name.textContent = item.name;
+                const percentage = document.createElement('strong');
+                percentage.className = 'course-grade-percentage';
+                percentage.textContent = `${item.percentage}%`;
+                row.append(name, percentage);
+                content.appendChild(row);
+            });
+        }
+
+        async function loadRules() {
+            if (state.courseGradeRules.has(cacheKey)) {
+                renderRules(state.courseGradeRules.get(cacheKey));
+                return;
+            }
+            if (loading) return;
+            loading = true;
+            renderMessage(t('grading-loading'));
+            try {
+                const params = new URLSearchParams({ semester: course.semester, selCode: course.selCode });
+                const response = await fetch(`${window.API_BASE_URL || ''}/api/course-grade-rules?${params}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const items = Array.isArray(data.items)
+                    ? data.items.filter((item) => item && item.name && Number.isFinite(Number(item.percentage)))
+                    : [];
+                state.courseGradeRules.set(cacheKey, items);
+                renderRules(items);
+            } catch (error) {
+                console.warn('Failed to load FCU grade rules:', error);
+                renderMessage(t('grading-error'), true);
+            } finally {
+                loading = false;
+            }
+        }
+
+        toggle.addEventListener('click', () => {
+            const willOpen = toggle.getAttribute('aria-expanded') !== 'true';
+            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            content.classList.toggle('hidden', !willOpen);
+            action.textContent = willOpen ? `${t('hide-grading')} ↑` : `${t('view-grading')} ↓`;
+            if (willOpen) loadRules();
+        });
+
+        wrapper.append(toggle, content);
+        return wrapper;
     }
 
     function createStatLine(label, value, valueClass = '') {
