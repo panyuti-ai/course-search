@@ -977,6 +977,23 @@
     background: #b8b7b3;
     opacity: 0.65;
 }
+#floating-timetable {
+    transform-origin: left bottom;
+    transition: width 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.36s ease;
+}
+#floating-timetable-scroll {
+    overscroll-behavior: contain;
+    transition: max-height 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#floating-timetable.is-course-reveal-expanded {
+    width: min(64rem, calc(100vw - 3rem)) !important;
+    z-index: 60;
+    box-shadow: 0 22px 70px rgba(15, 15, 15, 0.32);
+}
+#floating-timetable.is-course-reveal-expanded #floating-timetable-scroll {
+    max-height: min(44rem, calc(100vh - 8rem)) !important;
+}
 .planner-calendar--compact {
     min-width: 620px;
     border-spacing: 3px;
@@ -1009,8 +1026,18 @@
     .planner-calendar {
         border-spacing: 4px;
     }
+    #floating-timetable.is-course-reveal-expanded {
+        left: 0.5rem !important;
+        bottom: 0.5rem !important;
+        width: calc(100vw - 1rem) !important;
+    }
+    #floating-timetable.is-course-reveal-expanded #floating-timetable-scroll {
+        max-height: calc(100vh - 5rem) !important;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
+    #floating-timetable,
+    #floating-timetable-scroll,
     .planner-calendar-course,
     .planner-calendar-empty {
         transition: none;
