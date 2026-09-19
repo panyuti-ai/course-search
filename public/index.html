@@ -304,13 +304,16 @@
                     </details>
 
                     <!-- Dynamic Timetable -->
-                    <div id="planner-timetable-wrap" class="hidden">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-xs font-semibold text-notion-text-secondary dark:text-dark-text-secondary uppercase tracking-wider" data-i18n-text="timetable-label">動態課表</h3>
-                            <span id="planner-timetable-legend" class="text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
+                    <div id="planner-timetable-wrap" class="hidden planner-calendar-panel">
+                        <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-notion-text dark:text-dark-text" data-i18n-text="timetable-label">動態課表</h3>
+                                <p class="mt-0.5 text-xs text-notion-text-secondary dark:text-dark-text-secondary" data-i18n-text="timetable-helper">點空白時段即可找能加入的課</p>
+                            </div>
+                            <span id="planner-timetable-legend" class="flex flex-wrap items-center justify-end gap-2 text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table id="planner-timetable" class="w-full text-xs border-collapse select-none">
+                        <div class="planner-calendar-scroll overflow-x-auto">
+                            <table id="planner-timetable" class="planner-calendar w-full text-xs border-separate select-none">
                             </table>
                         </div>
                     </div>
@@ -396,7 +399,7 @@
             </div>
         </div>
         <div id="floating-timetable-scroll" class="overflow-auto p-1">
-            <table id="floating-timetable-table" class="w-full text-xs border-collapse"></table>
+            <table id="floating-timetable-table" class="planner-calendar planner-calendar--compact w-full text-xs border-separate"></table>
         </div>
     </div>
 

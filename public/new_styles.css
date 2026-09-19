@@ -333,3 +333,228 @@
         transition: none;
     }
 }
+
+/* ── 動態課表：行事曆式視覺層級 ── */
+.planner-calendar-panel {
+    padding: 16px;
+    border: 1px solid #e7e6e2;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fbfbfa 0%, #f7f7f5 100%);
+}
+.dark .planner-calendar-panel {
+    border-color: #343434;
+    background: linear-gradient(180deg, #242424 0%, #202020 100%);
+}
+.planner-calendar-scroll {
+    margin: 0 -4px -4px;
+    padding: 4px;
+    scrollbar-width: thin;
+}
+.planner-calendar {
+    min-width: 760px;
+    border-spacing: 6px 5px;
+    table-layout: fixed;
+}
+.planner-calendar-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 4px 8px 8px;
+    color: #787774;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    background: transparent;
+}
+.planner-calendar-header span {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 9px;
+    border-radius: 999px;
+}
+.planner-calendar-header.is-today span {
+    color: #137c9e;
+    background: #d3edf6;
+}
+.dark .planner-calendar-header {
+    color: #a7a7a3;
+}
+.dark .planner-calendar-header.is-today span {
+    color: #8bd5ec;
+    background: rgba(46, 170, 220, 0.18);
+}
+.planner-calendar-corner {
+    color: #aaa9a5;
+}
+.planner-calendar-period {
+    position: relative;
+    padding: 0 8px 0 0;
+    color: #9b9a97;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-align: right;
+    vertical-align: top;
+    background: transparent;
+}
+.planner-calendar-period span {
+    position: relative;
+    top: -0.35rem;
+}
+.planner-calendar-empty {
+    position: relative;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid #ebeae7;
+    color: transparent;
+    text-align: center;
+    cursor: pointer;
+    background: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.planner-calendar-empty span {
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 1rem;
+}
+.planner-calendar-empty:hover,
+.planner-calendar-empty:focus-visible {
+    border-color: transparent;
+    border-radius: 10px;
+    color: #2eaadc;
+    background: rgba(46, 170, 220, 0.09);
+    outline: none;
+}
+.planner-calendar-empty.is-today {
+    border-color: #d8edf4;
+}
+.dark .planner-calendar-empty {
+    border-color: #343434;
+}
+.dark .planner-calendar-empty.is-today {
+    border-color: rgba(46, 170, 220, 0.22);
+}
+.planner-calendar-course {
+    position: relative;
+    padding: 0;
+    border: 0;
+    border-radius: 11px;
+    color: var(--course-fg);
+    vertical-align: top;
+    background: var(--course-bg);
+    box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08), inset 3px 0 0 currentColor;
+    opacity: var(--course-opacity);
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.planner-calendar-course:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 15, 15, 0.11), inset 3px 0 0 currentColor;
+}
+.planner-calendar-course:focus-visible {
+    outline: 3px solid rgba(46, 170, 220, 0.38);
+    outline-offset: 2px;
+}
+.planner-course-block {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 3px;
+    padding: 9px 10px 9px 13px;
+    text-align: left;
+}
+.planner-course-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: break-word;
+}
+.planner-course-time {
+    font-size: 0.68rem;
+    font-weight: 500;
+    opacity: 0.72;
+}
+.planner-new-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 19px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: #fff;
+    background: #2eaadc;
+    box-shadow: 0 2px 7px rgba(46, 170, 220, 0.28);
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
+}
+@keyframes plannerCourseAdded {
+    0% { transform: scale(0.93); box-shadow: 0 0 0 0 rgba(46, 170, 220, 0.52), inset 3px 0 0 currentColor; }
+    55% { transform: scale(1.02); box-shadow: 0 0 0 7px rgba(46, 170, 220, 0), inset 3px 0 0 currentColor; }
+    100% { transform: scale(1); box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08), inset 3px 0 0 currentColor; }
+}
+.planner-calendar-course.is-recently-added {
+    z-index: 1;
+    animation: plannerCourseAdded 0.75s ease-out;
+    outline: 2px solid rgba(46, 170, 220, 0.65);
+    outline-offset: 2px;
+}
+.planner-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+.planner-legend-chip::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+    background: #2eaadc;
+}
+.planner-legend-chip.is-fixed::before {
+    background: #b8b7b3;
+    opacity: 0.65;
+}
+.planner-calendar--compact {
+    min-width: 620px;
+    border-spacing: 3px;
+}
+.planner-calendar--compact .planner-calendar-header,
+.planner-calendar--compact .planner-calendar-period {
+    font-size: 0.62rem;
+}
+.planner-calendar--compact .planner-course-block {
+    padding: 6px 7px 6px 9px;
+}
+.planner-calendar--compact .planner-course-name {
+    font-size: 0.7rem;
+}
+.planner-calendar--compact .planner-course-time,
+.planner-calendar--compact .planner-new-badge {
+    display: none;
+}
+@media (max-width: 640px) {
+    .planner-calendar-panel {
+        padding: 12px 10px;
+        border-radius: 12px;
+    }
+    .planner-calendar {
+        border-spacing: 4px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .planner-calendar-course,
+    .planner-calendar-empty {
+        transition: none;
+    }
+    .planner-calendar-course.is-recently-added {
+        animation: none;
+    }
+}

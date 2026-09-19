@@ -153,7 +153,8 @@
             studentGrade: null,
             shuffleSeed: 0,
             candidateExpanded: { bg: false, other: false },
-            unpinnedCourses: new Set()
+            unpinnedCourses: new Set(),
+            recentlyAddedCourseId: null
         },
         plannerChat: {
             open: false,
@@ -1836,8 +1837,7 @@
                 return;
             }
             state.planner.selected.set(entry.id, entry);
-            renderPlanner();
-            showToast(t('added-to-plan', { name: course.course }), 'success');
+            announcePlannerCourseAdded(entry, { removeFromPoolOnUndo: Boolean(entry.fromCard) });
         });
 
         addToPlanRow.appendChild(addToPlanBtn);
@@ -1845,7 +1845,7 @@
         return actions;
     }
 
-    function showToast(message, type = 'success') {
+    function showToast(message, type = 'success', options = {}) {
         const container = document.getElementById('toast-container');
         if (!container) return;
 
@@ -1854,7 +1854,31 @@
         const textClass = type === 'success' ? 'text-white dark:text-dark-bg' : 'text-white';
         toast.className = `${bgClass} ${textClass} px-5 py-3 rounded-lg shadow-md flex items-center gap-2 text-sm font-medium transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto`;
 
-        toast.textContent = message;
+        const messageNode = document.createElement('span');
+        messageNode.textContent = message;
+        toast.appendChild(messageNode);
+
+        let dismissed = false;
+        let dismissTimer = null;
+        const dismiss = () => {
+            if (dismissed) return;
+            dismissed = true;
+            if (dismissTimer) clearTimeout(dismissTimer);
+            toast.classList.add('translate-y-2', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        };
+
+        if (options.actionLabel && typeof options.onAction === 'function') {
+            const action = document.createElement('button');
+            action.type = 'button';
+            action.className = 'ml-2 rounded-md border border-current px-2 py-1 text-xs font-semibold opacity-90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-current';
+            action.textContent = options.actionLabel;
+            action.addEventListener('click', () => {
+                dismiss();
+                options.onAction();
+            });
+            toast.appendChild(action);
+        }
 
         container.appendChild(toast);
 
@@ -1862,12 +1886,8 @@
         void toast.offsetWidth;
         toast.classList.remove('translate-y-2', 'opacity-0');
 
-        setTimeout(() => {
-            toast.classList.add('translate-y-2', 'opacity-0');
-            setTimeout(() => {
-                container.removeChild(toast);
-            }, 300);
-        }, 3000);
+        dismissTimer = setTimeout(dismiss, Number(options.duration) || 3000);
+        return { dismiss };
     }
 
     function shareCourse(course) {
@@ -3608,9 +3628,52 @@
             showToast(t('conflict-planner'), 'error');
             return;
         }
+        const previousSelectReason = course.selectReason;
         course.selectReason = { type: 'manual' };
         state.planner.selected.set(course.id, course);
+        announcePlannerCourseAdded(course, { previousSelectReason });
+    }
+
+    function focusRecentlyAddedPlannerCourse(courseId) {
+        requestAnimationFrame(() => {
+            const course = state.planner.selected.get(courseId);
+            if (!course || !elements.plannerTimetable) return;
+            const target = Array.from(elements.plannerTimetable.querySelectorAll('[data-recently-added="true"]'))
+                .find((cell) => cell.dataset.course === course.course);
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            target.focus({ preventScroll: true });
+        });
+    }
+
+    function announcePlannerCourseAdded(course, options = {}) {
+        state.planner.recentlyAddedCourseId = course.id;
         renderPlanner();
+        focusRecentlyAddedPlannerCourse(course.id);
+
+        const timeText = formatCourseTimes(getPlannerTimetableTimes(course));
+        const message = timeText
+            ? t('added-to-plan-at', { name: course.course, time: timeText })
+            : t('added-to-plan', { name: course.course });
+
+        showToast(message, 'success', {
+            actionLabel: t('undo'),
+            duration: 6500,
+            onAction: () => {
+                if (!state.planner.selected.has(course.id)) return;
+                state.planner.selected.delete(course.id);
+                if (options.previousSelectReason === undefined) delete course.selectReason;
+                else course.selectReason = options.previousSelectReason;
+                if (options.removeFromPoolOnUndo) {
+                    state.planner.pool = state.planner.pool.filter((item) => item.id !== course.id);
+                }
+                if (state.planner.recentlyAddedCourseId === course.id) {
+                    state.planner.recentlyAddedCourseId = null;
+                }
+                renderPlanner();
+                showToast(t('addition-undone', { name: course.course }), 'success');
+            }
+        });
     }
 
     function findPlannerCourse(courseId) {
@@ -3662,6 +3725,9 @@
             return;
         }
         state.planner.selected.delete(courseId);
+        if (state.planner.recentlyAddedCourseId === courseId) {
+            state.planner.recentlyAddedCourseId = null;
+        }
         delete course.selectReason;
 
         // 已解除固定的上傳課程要從上傳清單一併移除，否則動態課表、匯出 PDF、
@@ -3930,6 +3996,15 @@
         return normalizePlannerTimes(times || timeSlots || []);
     }
 
+    function escapePlannerHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     function renderPlannerTimetable() {
         const wrap = elements.plannerTimetableWrap;
         const table = elements.plannerTimetable;
@@ -3995,38 +4070,60 @@
         // Always show Mon-Fri; show Sat/Sun only if needed.
         const visibleDays = DAYS.filter((d, i) => i < 5 || activeDaySet.has(d));
 
-        // Build table HTML.
-        const cellBase = 'border border-notion-border dark:border-dark-border px-2 py-2 text-center align-middle';
-        const headerCell = `${cellBase} font-semibold bg-notion-bg-secondary dark:bg-dark-card text-notion-text-secondary dark:text-dark-text-secondary text-xs`;
-        const periodCell = `${cellBase} text-notion-text-secondary dark:text-dark-text-secondary font-medium text-xs bg-white dark:bg-dark-bg`;
-        const emptyCell = `${cellBase} bg-white dark:bg-dark-bg hover:bg-notion-bg-hover dark:hover:bg-dark-card focus:bg-notion-bg-hover dark:focus:bg-dark-card cursor-pointer transition-colors duration-100`;
+        // Calendar-like layout: consecutive periods become one course block instead
+        // of repeating the course name in every Excel-style cell.
+        const headerCell = 'planner-calendar-header';
+        const periodCell = 'planner-calendar-period';
+        const emptyCell = 'planner-calendar-empty';
         const dayMinWidth = '8.75rem';
         const rowHeight = '2.75rem';
+        const todayIndex = (new Date().getDay() + 6) % 7;
+        const today = DAYS[todayIndex];
+        const recentCourse = state.planner.selected.get(state.planner.recentlyAddedCourseId);
+        const recentCourseName = recentCourse ? toPlannerString(recentCourse.course) : '';
+        const coveredSlots = new Set();
+        let recentBadgeRendered = false;
 
         let html = '<thead><tr>';
-        html += `<th class="${headerCell}" style="width:2.75rem;min-width:2.75rem;">節</th>`;
+        html += `<th class="${headerCell} planner-calendar-corner" style="width:2.75rem;min-width:2.75rem;">節</th>`;
         visibleDays.forEach((d) => {
-            html += `<th class="${headerCell}" style="min-width:${dayMinWidth};">${DAY_LABELS[DAYS.indexOf(d)]}</th>`;
+            const todayClass = d === today ? ' is-today' : '';
+            html += `<th class="${headerCell}${todayClass}" style="min-width:${dayMinWidth};"><span>星期${DAY_LABELS[DAYS.indexOf(d)]}</span></th>`;
         });
         html += '</tr></thead><tbody>';
 
         PERIODS.forEach((period) => {
             html += '<tr>';
-            html += `<td class="${periodCell}" style="width:2.75rem;min-width:2.75rem;height:${rowHeight};">${period}</td>`;
+            html += `<td class="${periodCell}" style="width:2.75rem;min-width:2.75rem;height:${rowHeight};"><span>${period}</span></td>`;
             visibleDays.forEach((day) => {
                 const slotKey = `${day}${period}`;
+                if (coveredSlots.has(slotKey)) return;
                 const courseName = slotMap.get(slotKey) || '';
                 if (courseName) {
+                    let span = 1;
+                    while (period + span <= PERIODS.length && slotMap.get(`${day}${period + span}`) === courseName) {
+                        coveredSlots.add(`${day}${period + span}`);
+                        span += 1;
+                    }
                     const colorIdx = courseColorMap.get(courseName) ?? 0;
                     const bg = TIMETABLE_COLORS[colorIdx];
                     const fg = TIMETABLE_TEXT_COLORS[colorIdx];
                     const isSelected = selectedNames.has(courseName);
                     const opacity = isSelected ? '1' : '0.55';
-                    const escapedName = courseName.replace(/"/g, '&quot;');
-                    html += `<td class="${cellBase}" data-course="${escapedName}" style="background:${bg};color:${fg};opacity:${opacity};font-size:0.82rem;line-height:1.45;min-width:${dayMinWidth};height:${rowHeight};word-break:keep-all;overflow-wrap:anywhere;white-space:normal;font-weight:600;">${courseName}</td>`;
+                    const escapedName = escapePlannerHtml(courseName);
+                    const isRecent = Boolean(recentCourseName && courseName === recentCourseName);
+                    const recentClass = isRecent ? ' is-recently-added' : '';
+                    const fixedClass = isSelected ? '' : ' is-fixed';
+                    const badge = isRecent && !recentBadgeRendered
+                        ? `<span class="planner-new-badge">${escapePlannerHtml(t('just-added'))}</span>`
+                        : '';
+                    if (isRecent) recentBadgeRendered = true;
+                    const periodText = span === 1 ? `第 ${period} 節` : `第 ${period}–${period + span - 1} 節`;
+                    html += `<td rowspan="${span}" tabindex="${isRecent ? '0' : '-1'}" class="planner-calendar-course${fixedClass}${recentClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${escapedName}，${periodText}" style="--course-bg:${bg};--course-fg:${fg};--course-opacity:${opacity};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${badge}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
                 } else {
                     const dayLabel = DAY_LABELS[DAYS.indexOf(day)];
-                    html += `<td class="${emptyCell}" tabindex="0" role="button" aria-label="新增星期${dayLabel}第${period}節課程" title="點擊查看可加入課程" data-empty-slot="${slotKey}" data-day-label="${dayLabel}" data-period="${period}" style="min-width:${dayMinWidth};height:${rowHeight};"></td>`;
+                    const todayClass = day === today ? ' is-today' : '';
+                    html += `<td class="${emptyCell}${todayClass}" tabindex="0" role="button" aria-label="新增星期${dayLabel}第${period}節課程" title="點擊查看可加入課程" data-empty-slot="${slotKey}" data-day-label="${dayLabel}" data-period="${period}" style="min-width:${dayMinWidth};height:${rowHeight};"><span aria-hidden="true">＋</span></td>`;
                 }
             });
             html += '</tr>';
@@ -4055,10 +4152,19 @@
 
         // Update legend.
         if (legend) {
-            const parts = [];
-            if (uploadedCourses.length) parts.push(`淡色=已辨識課程（固定課表，如需異動請洽系辦）`);
-            if (selectedCourses.length) parts.push(`深色=已加入課表`);
-            legend.textContent = parts.join('　');
+            legend.replaceChildren();
+            if (uploadedCourses.length) {
+                const fixed = document.createElement('span');
+                fixed.className = 'planner-legend-chip is-fixed';
+                fixed.textContent = t('timetable-fixed-legend');
+                legend.appendChild(fixed);
+            }
+            if (selectedCourses.length) {
+                const selected = document.createElement('span');
+                selected.className = 'planner-legend-chip is-selected';
+                selected.textContent = t('timetable-selected-legend');
+                legend.appendChild(selected);
+            }
         }
 
         // 如果已選課程為空，強制隱藏浮動課表
