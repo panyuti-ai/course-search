@@ -154,7 +154,8 @@
             shuffleSeed: 0,
             candidateExpanded: { bg: false, other: false },
             unpinnedCourses: new Set(),
-            recentlyAddedCourseId: null
+            recentlyAddedCourseId: null,
+            recentlyAddedRevealPendingId: null
         },
         plannerChat: {
             open: false,
@@ -205,6 +206,9 @@
         plannerTimetableWrap: document.getElementById('planner-timetable-wrap'),
         plannerTimetable: document.getElementById('planner-timetable'),
         plannerTimetableLegend: document.getElementById('planner-timetable-legend'),
+        searchTimetableWrap: document.getElementById('search-timetable-wrap'),
+        searchTimetable: document.getElementById('search-timetable'),
+        searchTimetableLegend: document.getElementById('search-timetable-legend'),
         floatingTimetable: document.getElementById('floating-timetable'),
         floatingTimetableTable: document.getElementById('floating-timetable-table'),
         floatingTimetableScroll: document.getElementById('floating-timetable-scroll'),
@@ -232,6 +236,7 @@
     let activeAiCourse = null;
     const plannerAddButtonUpdaters = new Set();
     let plannerUpdatedListenerBound = false;
+    let plannerCourseRevealTimer = null;
 
     function ensurePlannerUpdatedListener() {
         if (plannerUpdatedListenerBound) return;
@@ -2364,6 +2369,9 @@
 
             state.planner.uploadedCourses = loadedCourses;
             state.planner.selected = new Map();
+            state.planner.recentlyAddedCourseId = null;
+            state.planner.recentlyAddedRevealPendingId = null;
+            clearTimeout(plannerCourseRevealTimer);
             const selectedCourses = savedState.selectedCourses.length ? savedState.selectedCourses : loadedCourses;
             selectedCourses
                 .map((course, index) => normalizePlannerInputCourse({
@@ -2434,6 +2442,9 @@
             state.planner.hasPlan = false;
             state.planner.pool = [];
             state.planner.selected = new Map();
+            state.planner.recentlyAddedCourseId = null;
+            state.planner.recentlyAddedRevealPendingId = null;
+            clearTimeout(plannerCourseRevealTimer);
             // 警告在「學分回填之後」才產生：AI 讀 PDF 時多半讀不到學分（課表上通常
             // 沒印），但我們接著會去課程目錄查。若沿用 AI 當下的說法，畫面會一邊說
             // 「無法辨識學分」一邊顯示查到的學分，自相矛盾。
@@ -3449,6 +3460,9 @@
         const built = buildPlannerPool(parsed.courses, aiKeywords);
         state.planner.pool = built.pool;
         state.planner.selected = new Map();
+        state.planner.recentlyAddedCourseId = null;
+        state.planner.recentlyAddedRevealPendingId = null;
+        clearTimeout(plannerCourseRevealTimer);
         state.planner.candidateExpanded = { bg: false, other: false };
         state.planner.warnings = [...parsed.warnings, ...built.warnings];
         autoSelectPlannerCourses(aiKeywords.length > 0);
@@ -3534,6 +3548,9 @@
         state.planner.selected = new Map();
         state.planner.warnings = [];
         state.planner.hasPlan = false;
+        state.planner.recentlyAddedCourseId = null;
+        state.planner.recentlyAddedRevealPendingId = null;
+        clearTimeout(plannerCourseRevealTimer);
         state.planner.candidateExpanded = { bg: false, other: false };
         renderPlanner();
     }
@@ -3931,17 +3948,50 @@
     function focusRecentlyAddedPlannerCourse(courseId) {
         requestAnimationFrame(() => {
             const course = state.planner.selected.get(courseId);
-            if (!course || !elements.plannerTimetable) return;
-            const target = Array.from(elements.plannerTimetable.querySelectorAll('[data-recently-added="true"]'))
-                .find((cell) => cell.dataset.course === course.course);
-            if (!target) return;
+            const activeTable = activeView === 'search'
+                ? elements.searchTimetable
+                : elements.plannerTimetable;
+            if (!course || !activeTable) return;
+            const target = Array.from(activeTable.querySelectorAll('[data-recently-added="true"]'))
+                .find((cell) => cell.dataset.courseId === course.id || cell.dataset.course === course.course);
+            if (!target) {
+                if (state.planner.recentlyAddedRevealPendingId === courseId) {
+                    state.planner.recentlyAddedRevealPendingId = null;
+                }
+                return;
+            }
+
+            clearTimeout(plannerCourseRevealTimer);
             target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             target.focus({ preventScroll: true });
+
+            // 先完成捲動，停一下讓使用者看清楚落點，再把該課從透明淡入。
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            plannerCourseRevealTimer = setTimeout(() => {
+                const cells = [
+                    elements.searchTimetable,
+                    elements.plannerTimetable,
+                    elements.floatingTimetableTable
+                ].filter(Boolean).flatMap((timetable) =>
+                    Array.from(timetable.querySelectorAll('[data-recently-added="true"]'))
+                ).filter((cell) =>
+                    cell.dataset.courseId === course.id || cell.dataset.course === course.course
+                );
+
+                cells.forEach((cell) => {
+                    cell.classList.remove('is-reveal-pending');
+                    cell.classList.add('is-revealing');
+                });
+                if (state.planner.recentlyAddedRevealPendingId === courseId) {
+                    state.planner.recentlyAddedRevealPendingId = null;
+                }
+            }, reduceMotion ? 0 : 650);
         });
     }
 
     function announcePlannerCourseAdded(course, options = {}) {
         state.planner.recentlyAddedCourseId = course.id;
+        state.planner.recentlyAddedRevealPendingId = course.id;
         renderPlanner();
         focusRecentlyAddedPlannerCourse(course.id);
 
@@ -3963,6 +4013,10 @@
                 }
                 if (state.planner.recentlyAddedCourseId === course.id) {
                     state.planner.recentlyAddedCourseId = null;
+                }
+                if (state.planner.recentlyAddedRevealPendingId === course.id) {
+                    state.planner.recentlyAddedRevealPendingId = null;
+                    clearTimeout(plannerCourseRevealTimer);
                 }
                 renderPlanner();
                 showToast(t('addition-undone', { name: course.course }), 'success');
@@ -4021,6 +4075,10 @@
         state.planner.selected.delete(courseId);
         if (state.planner.recentlyAddedCourseId === courseId) {
             state.planner.recentlyAddedCourseId = null;
+        }
+        if (state.planner.recentlyAddedRevealPendingId === courseId) {
+            state.planner.recentlyAddedRevealPendingId = null;
+            clearTimeout(plannerCourseRevealTimer);
         }
         delete course.selectReason;
 
@@ -4304,6 +4362,9 @@
         const wrap = elements.plannerTimetableWrap;
         const table = elements.plannerTimetable;
         const legend = elements.plannerTimetableLegend;
+        const searchWrap = elements.searchTimetableWrap;
+        const searchTable = elements.searchTimetable;
+        const searchLegend = elements.searchTimetableLegend;
         if (!wrap || !table) return;
 
         // Collect courses to display: uploaded courses overlaid with current selection.
@@ -4330,10 +4391,12 @@
 
         if (!allCourses.length && !state.planner.hasPlan) {
             wrap.classList.add('hidden');
+            searchWrap?.classList.add('hidden');
             if (elements.floatingTimetable) elements.floatingTimetable.classList.add('hidden');
             return;
         }
         wrap.classList.remove('hidden');
+        searchWrap?.classList.remove('hidden');
 
         // Assign a color to each course.
         const courseColorMap = new Map();
@@ -4413,6 +4476,10 @@
                     const escapedCourseId = isRemovable ? escapePlannerHtml(selectedEntry.id) : '';
                     const isRecent = Boolean(recentCourseName && courseName === recentCourseName);
                     const recentClass = isRecent ? ' is-recently-added' : '';
+                    const revealPending = Boolean(
+                        isRecent && selectedEntry?.id === state.planner.recentlyAddedRevealPendingId
+                    );
+                    const revealPendingClass = revealPending ? ' is-reveal-pending' : '';
                     const originalClass = isOriginal ? ' is-original' : '';
                     const removableClass = isRemovable ? ' is-removable' : '';
                     const singlePeriodClass = span === 1 ? ' is-single-period' : '';
@@ -4436,7 +4503,7 @@
                         ? ` role="button" data-remove-course-id="${escapedCourseId}" title="${escapePlannerHtml(t('planner-card-remove-hint'))}"`
                         : '';
                     const ariaLabel = `${statusText}，${courseName}，${periodText}${isRemovable ? `，${t('planner-card-remove-hint')}` : ''}`;
-                    html += `<td rowspan="${span}" tabindex="${isRemovable ? '0' : '-1'}" class="planner-calendar-course${originalClass}${recentClass}${removableClass}${singlePeriodClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${escapePlannerHtml(ariaLabel)}"${removeAttributes} style="--course-bg:${bg};--course-fg:${fg};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${statusBadge}${removeHint}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
+                    html += `<td rowspan="${span}" tabindex="${isRemovable ? '0' : '-1'}" class="planner-calendar-course${originalClass}${recentClass}${revealPendingClass}${removableClass}${singlePeriodClass}" data-course="${escapedName}" data-course-id="${escapedCourseId}" data-recently-added="${isRecent}" aria-label="${escapePlannerHtml(ariaLabel)}"${removeAttributes} style="--course-bg:${bg};--course-fg:${fg};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${statusBadge}${removeHint}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
                 } else {
                     const dayLabel = DAY_LABELS[DAYS.indexOf(day)];
                     const todayClass = day === today ? ' is-today' : '';
@@ -4449,28 +4516,34 @@
         table.innerHTML = html;
         attachPlannerTimetableInteractions(table);
 
+        // 搜尋與排課是兩個入口，但共用完全相同的課表 HTML 與互動邏輯。
+        if (searchTable) {
+            searchTable.innerHTML = html;
+            attachPlannerTimetableInteractions(searchTable);
+        }
+
         // Sync the same interactions to the floating timetable.
         if (elements.floatingTimetableTable) {
             elements.floatingTimetableTable.innerHTML = html;
             attachPlannerTimetableInteractions(elements.floatingTimetableTable);
         }
 
-        // Update legend.
-        if (legend) {
-            legend.replaceChildren();
+        // Update both legends.
+        [legend, searchLegend].filter(Boolean).forEach((legendNode) => {
+            legendNode.replaceChildren();
             if (uploadedCourses.length) {
                 const fixed = document.createElement('span');
                 fixed.className = 'planner-legend-chip is-fixed';
                 fixed.textContent = t('timetable-fixed-legend');
-                legend.appendChild(fixed);
+                legendNode.appendChild(fixed);
             }
             if (selectedCourses.length) {
                 const selected = document.createElement('span');
                 selected.className = 'planner-legend-chip is-selected';
                 selected.textContent = t('timetable-selected-legend');
-                legend.appendChild(selected);
+                legendNode.appendChild(selected);
             }
-        }
+        });
 
         // 如果已選課程為空，強制隱藏浮動課表
         if (!selectedCourses.length && elements.floatingTimetable) {
