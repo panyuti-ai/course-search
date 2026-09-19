@@ -4056,6 +4056,9 @@
         });
 
         const uploadedNames = new Set(uploadedCourses.map((c) => toPlannerString(c?.course ?? c?.name)));
+        const selectedByName = new Map(
+            selectedCourses.map((c) => [toPlannerString(c?.course ?? c?.name), c])
+        );
 
         const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
         const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -4109,10 +4112,14 @@
                     const bg = TIMETABLE_COLORS[colorIdx];
                     const fg = TIMETABLE_TEXT_COLORS[colorIdx];
                     const isOriginal = uploadedNames.has(courseName);
+                    const selectedEntry = selectedByName.get(courseName);
+                    const isRemovable = Boolean(selectedEntry && !selectedEntry.pinned);
                     const escapedName = escapePlannerHtml(courseName);
+                    const escapedCourseId = isRemovable ? escapePlannerHtml(selectedEntry.id) : '';
                     const isRecent = Boolean(recentCourseName && courseName === recentCourseName);
                     const recentClass = isRecent ? ' is-recently-added' : '';
                     const originalClass = isOriginal ? ' is-original' : '';
+                    const removableClass = isRemovable ? ' is-removable' : '';
                     const singlePeriodClass = span === 1 ? ' is-single-period' : '';
                     let statusKind = 'added';
                     let statusText = `✓ ${t('timetable-selected-legend')}`;
@@ -4125,9 +4132,16 @@
                         statusText = `＋ ${t('just-added')}`;
                     }
                     const statusBadge = `<span class="planner-status-badge is-${statusKind}">${escapePlannerHtml(statusText)}</span>`;
+                    const removeHint = isRemovable
+                        ? `<span class="planner-remove-hint" aria-hidden="true">✕</span>`
+                        : '';
                     if (isRecent) recentBadgeRendered = true;
                     const periodText = span === 1 ? `第 ${period} 節` : `第 ${period}–${period + span - 1} 節`;
-                    html += `<td rowspan="${span}" tabindex="${isRecent ? '0' : '-1'}" class="planner-calendar-course${originalClass}${recentClass}${singlePeriodClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${statusText}，${escapedName}，${periodText}" style="--course-bg:${bg};--course-fg:${fg};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${statusBadge}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
+                    const removeAttributes = isRemovable
+                        ? ` role="button" data-remove-course-id="${escapedCourseId}" title="${escapePlannerHtml(t('planner-card-remove-hint'))}"`
+                        : '';
+                    const ariaLabel = `${statusText}，${courseName}，${periodText}${isRemovable ? `，${t('planner-card-remove-hint')}` : ''}`;
+                    html += `<td rowspan="${span}" tabindex="${isRemovable ? '0' : '-1'}" class="planner-calendar-course${originalClass}${recentClass}${removableClass}${singlePeriodClass}" data-course="${escapedName}" data-recently-added="${isRecent}" aria-label="${escapePlannerHtml(ariaLabel)}"${removeAttributes} style="--course-bg:${bg};--course-fg:${fg};min-width:${dayMinWidth};height:${2.75 * span}rem;"><div class="planner-course-block">${statusBadge}${removeHint}<span class="planner-course-name">${escapedName}</span><span class="planner-course-time">${periodText}</span></div></td>`;
                 } else {
                     const dayLabel = DAY_LABELS[DAYS.indexOf(day)];
                     const todayClass = day === today ? ' is-today' : '';
@@ -4140,22 +4154,10 @@
         table.innerHTML = html;
         attachPlannerTimetableInteractions(table);
 
-        // Sync to floating timetable with clickable remove on selected courses
+        // Sync the same interactions to the floating timetable.
         if (elements.floatingTimetableTable) {
             elements.floatingTimetableTable.innerHTML = html;
             attachPlannerTimetableInteractions(elements.floatingTimetableTable);
-            // Add click-to-remove on selected (non-pinned) course cells
-            elements.floatingTimetableTable.querySelectorAll('td[data-course]').forEach((td) => {
-                const name = td.dataset.course;
-                const entry = Array.from(state.planner.selected.values()).find((c) => c.course === name);
-                if (entry && !entry.pinned) {
-                    td.style.cursor = 'pointer';
-                    td.title = `點擊移除「${name}」`;
-                    td.addEventListener('click', () => {
-                        plannerRemoveCourse(entry.id);
-                    });
-                }
-            });
         }
 
         // Update legend.
@@ -4346,6 +4348,88 @@
                 openPicker();
             });
         });
+
+        table.querySelectorAll('td[data-remove-course-id]').forEach((td) => {
+            const openRemoveConfirm = () => showPlannerRemoveConfirm(td.dataset.removeCourseId);
+            td.addEventListener('click', openRemoveConfirm);
+            td.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openRemoveConfirm();
+            });
+        });
+    }
+
+    function showPlannerRemoveConfirm(courseId) {
+        const course = state.planner.selected.get(courseId);
+        if (!course) return;
+        if (course.pinned) {
+            showToast(t('pinned-no-remove'), 'error');
+            return;
+        }
+
+        document.getElementById('planner-remove-confirm')?.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'planner-remove-confirm';
+        overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6';
+
+        const panel = document.createElement('section');
+        panel.className = 'w-full max-w-sm rounded-xl border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card p-5 shadow-2xl';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'planner-remove-confirm-title');
+
+        const icon = document.createElement('div');
+        icon.className = 'mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-lg text-notion-red dark:bg-red-950/40';
+        icon.textContent = '−';
+        icon.setAttribute('aria-hidden', 'true');
+
+        const title = document.createElement('h4');
+        title.id = 'planner-remove-confirm-title';
+        title.className = 'text-base font-semibold text-notion-text dark:text-dark-text';
+        title.textContent = t('remove-course-title');
+
+        const message = document.createElement('p');
+        message.className = 'mt-2 text-sm leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary';
+        message.textContent = t('remove-course-message', { name: course.course });
+
+        const actions = document.createElement('div');
+        actions.className = 'mt-5 flex justify-end gap-2';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'min-h-10 rounded-lg border border-notion-border dark:border-dark-border px-4 text-sm font-medium hover:bg-notion-bg-hover dark:hover:bg-dark-border';
+        cancelButton.textContent = t('cancel');
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'min-h-10 rounded-lg bg-notion-red px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-notion-red focus:ring-offset-2 dark:focus:ring-offset-dark-card';
+        removeButton.textContent = t('remove-course-confirm');
+
+        const close = () => {
+            document.removeEventListener('keydown', handleEscape);
+            overlay.remove();
+        };
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') close();
+        };
+        cancelButton.addEventListener('click', close);
+        removeButton.addEventListener('click', () => {
+            close();
+            plannerRemoveCourse(course.id);
+            showToast(t('removed-from-plan', { name: course.course }), 'success');
+        });
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) close();
+        });
+        document.addEventListener('keydown', handleEscape);
+
+        actions.append(cancelButton, removeButton);
+        panel.append(icon, title, message, actions);
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => cancelButton.focus());
     }
 
     function showPlannerSlotPicker(slotKey, dayLabel, period) {
