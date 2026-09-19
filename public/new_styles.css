@@ -466,6 +466,16 @@
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(15, 15, 15, 0.11), inset 3px 0 0 currentColor;
 }
+.planner-calendar-course.is-removable {
+    cursor: pointer;
+}
+.planner-calendar-course.is-removable .planner-course-block {
+    padding-right: 36px;
+}
+.planner-calendar-course.is-removable:hover,
+.planner-calendar-course.is-removable:focus-visible {
+    box-shadow: 0 5px 16px rgba(15, 15, 15, 0.16), inset 3px 0 0 currentColor;
+}
 .planner-calendar-course:focus-visible {
     outline: 3px solid rgba(46, 170, 220, 0.38);
     outline-offset: 2px;
@@ -521,6 +531,37 @@
     color: #fff;
     background: #2eaadc;
     box-shadow: 0 2px 7px rgba(46, 170, 220, 0.3);
+}
+.planner-remove-hint {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #787774;
+    background: rgba(255, 255, 255, 0.66);
+    border: 1px solid rgba(120, 119, 116, 0.22);
+    font-size: 0.65rem;
+    font-weight: 700;
+    opacity: 0.78;
+    transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+.dark .planner-remove-hint {
+    color: #d3d2cf;
+    background: rgba(31, 31, 31, 0.66);
+    border-color: rgba(211, 210, 207, 0.22);
+}
+.planner-calendar-course.is-removable:hover .planner-remove-hint,
+.planner-calendar-course.is-removable:focus-visible .planner-remove-hint {
+    color: #fff;
+    background: #eb5757;
+    border-color: #eb5757;
+    opacity: 1;
+    transform: scale(1.06);
 }
 .planner-calendar-course.is-single-period .planner-course-block {
     flex-flow: row wrap;
@@ -581,6 +622,12 @@
 .planner-calendar--compact .planner-course-time,
 .planner-calendar--compact .planner-status-badge {
     display: none;
+}
+.planner-calendar--compact .planner-remove-hint {
+    top: 4px;
+    right: 4px;
+    width: 17px;
+    height: 17px;
 }
 @media (max-width: 640px) {
     .planner-calendar-panel {
