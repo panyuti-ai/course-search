@@ -130,6 +130,10 @@ async function main() {
             const comments = await fetchComments(p.id);
             enrichedPosts.push({
                 id:           p.id,
+                forumAlias:   p.forumAlias || '',
+                url:          p.id && p.forumAlias
+                    ? `https://www.dcard.tw/f/${p.forumAlias}/p/${p.id}`
+                    : '',
                 title:        p.title || '',
                 content:      p.content || '',
                 likeCount:    p.likeCount || 0,

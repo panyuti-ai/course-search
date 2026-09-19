@@ -354,6 +354,7 @@
     const REVIEW_NOISE = [
         /共\s*\d+\s*則留言[^。]*。?/g,
         /有此相同課程名稱心得，但請先注意是否為該老師（[^）]*）所開之課程。?/g,
+        /未配對到對應課程，但有這位老師相關的心得。?/g,
     ];
 
     function cleanReviewSummary(value) {
@@ -367,6 +368,30 @@
             .split(/[,，、\/]/)
             .map((t) => t.trim())
             .filter(Boolean);
+    }
+
+    function normalizeReviewSources(value) {
+        if (!Array.isArray(value)) return [];
+        return value
+            .map((source) => {
+                const rawUrl = toPlannerString(source?.url).trim();
+                if (!rawUrl) return null;
+                try {
+                    const parsed = new URL(rawUrl);
+                    if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('dcard.tw')) return null;
+                } catch {
+                    return null;
+                }
+                return {
+                    url: rawUrl,
+                    title: toPlannerString(source?.title).trim(),
+                    commentCount: Number.isFinite(Number(source?.commentCount))
+                        ? Number(source.commentCount)
+                        : null,
+                };
+            })
+            .filter(Boolean)
+            .slice(0, 5);
     }
 
     function buildReviewIndex(rawReviews) {
@@ -385,6 +410,7 @@
                 teachers: new Set(teacherNames),
                 style: toPlannerString(item?.['上課方式']).trim(),
                 summary,
+                sources: normalizeReviewSources(item?.sources),
             };
             if (!reviewIndex.has(key)) reviewIndex.set(key, []);
             reviewIndex.get(key).push(entry);
@@ -1167,7 +1193,8 @@
         card.className = 'notion-card flex flex-col gap-3.5';
 
         card.appendChild(createCardHeader(course));
-        card.appendChild(createCardStats(course));
+        const stats = createCardStats(course);
+        if (stats) card.appendChild(stats);
 
         if (course.review) {
             card.appendChild(createCardReview(course));
@@ -1190,8 +1217,11 @@
         const header = document.createElement('div');
         header.className = 'flex flex-col gap-1.5';
 
+        const titleRow = document.createElement('div');
+        titleRow.className = 'flex items-start justify-between gap-3';
+
         const title = document.createElement('h3');
-        title.className = 'text-base font-semibold leading-snug text-black dark:text-white';
+        title.className = 'min-w-0 text-base font-semibold leading-snug text-black dark:text-white';
 
         if (course.selCode) {
             const codeSpan = document.createElement('span');
@@ -1203,7 +1233,39 @@
             title.textContent = course.course;
         }
 
-        header.appendChild(title);
+        const headerActions = document.createElement('div');
+        headerActions.className = 'flex shrink-0 items-center gap-1';
+
+        const shareButton = document.createElement('button');
+        shareButton.type = 'button';
+        shareButton.className = 'h-8 w-8 rounded-md text-sm text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
+        shareButton.textContent = '↗';
+        shareButton.title = t('share');
+        shareButton.setAttribute('aria-label', t('share'));
+        shareButton.addEventListener('click', () => shareCourse(course));
+
+        const favoriteButton = document.createElement('button');
+        favoriteButton.type = 'button';
+        favoriteButton.className = 'h-8 w-8 rounded-md text-lg text-notion-red hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
+        const updateFavoriteButton = () => {
+            const isFavorite = state.favorites.has(course.id);
+            favoriteButton.textContent = isFavorite ? '♥' : '♡';
+            favoriteButton.title = isFavorite ? t('unfavorite') : t('favorite');
+            favoriteButton.setAttribute('aria-label', favoriteButton.title);
+        };
+        updateFavoriteButton();
+        favoriteButton.addEventListener('click', () => {
+            toggleFavorite(course);
+            updateFavoriteButton();
+            showToast(
+                state.favorites.has(course.id) ? t('toast-favorited') : t('toast-unfavorited'),
+                'success'
+            );
+        });
+
+        headerActions.append(shareButton, favoriteButton);
+        titleRow.append(title, headerActions);
+        header.appendChild(titleRow);
 
         const metaRow = document.createElement('div');
         metaRow.className = 'flex flex-wrap items-center gap-2 text-sm text-black dark:text-white';
@@ -1266,13 +1328,12 @@
     }
 
     function createCardStats(course) {
-        const stats = document.createElement('div');
-        stats.className = 'flex flex-wrap gap-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary bg-notion-bg-secondary dark:bg-dark-bg-secondary px-3 py-2 rounded-md';
-
         const timesStr = formatCourseTimes(course.times);
-        if (timesStr) {
-            stats.appendChild(createStatLine(t('time-slot'), timesStr));
-        }
+        if (!timesStr) return null;
+
+        const stats = document.createElement('div');
+        stats.className = 'flex flex-wrap gap-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+        stats.appendChild(createStatLine(t('time-slot'), timesStr));
 
         return stats;
     }
@@ -1333,7 +1394,10 @@
 
         const summary = document.createElement('p');
         summary.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary leading-relaxed';
-        const truncated = truncateText(found.summary, 120);
+        const displaySummary = isInsufficientTeacherSummary(found.summary)
+            ? t('teacher-reviews-insufficient')
+            : found.summary;
+        const truncated = truncateText(displaySummary, 120);
         summary.textContent = truncated.display;
         if (truncated.truncated) {
             summary.className += ' cursor-pointer hover:bg-notion-bg-hover dark:hover:bg-dark-border rounded-md';
@@ -1341,7 +1405,7 @@
             summary.addEventListener('click', () => {
                 const open = summary.dataset.expanded === 'true';
                 summary.dataset.expanded = open ? 'false' : 'true';
-                summary.textContent = open ? truncated.display : found.summary;
+                summary.textContent = open ? truncated.display : displaySummary;
             });
         }
         box.appendChild(summary);
@@ -1354,92 +1418,195 @@
         if (!profiles.length) return null;
 
         const box = document.createElement('div');
-        box.className = 'flex flex-col gap-2 border-l-2 border-notion-border dark:border-dark-border pl-3 py-1';
+        box.className = 'flex items-center justify-between gap-3 rounded-lg border border-notion-border dark:border-dark-border bg-notion-bg-secondary/60 dark:bg-dark-bg-secondary/60 px-3 py-2.5';
 
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'text-left text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:text-black dark:hover:text-white transition-colors duration-100';
-        const closedLabel = profiles.length === 1
-            ? t('teacher-reviews-toggle', {
+        const copy = document.createElement('div');
+        copy.className = 'min-w-0';
+
+        const label = document.createElement('p');
+        label.className = 'text-xs font-medium text-black dark:text-white';
+        label.textContent = t('teacher-reviews-card-label');
+
+        const summary = document.createElement('p');
+        summary.className = 'mt-0.5 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+        summary.textContent = profiles.length === 1
+            ? t('teacher-reviews-card-summary', {
                 teacher: profiles[0].teacher,
                 n: profiles[0].courseCount,
             })
-            : t('teacher-reviews-toggle-multiple', { n: profiles.length });
-        toggle.textContent = closedLabel;
-        toggle.setAttribute('aria-expanded', 'false');
-        box.appendChild(toggle);
+            : t('teacher-reviews-card-summary-multiple', { n: profiles.length });
+        copy.append(label, summary);
 
-        const details = document.createElement('div');
-        details.className = 'hidden flex flex-col gap-3 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+        const viewButton = document.createElement('button');
+        viewButton.type = 'button';
+        viewButton.className = 'shrink-0 rounded-md border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card px-3 py-1.5 text-xs font-medium text-black dark:text-white hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
+        viewButton.textContent = `${t('teacher-reviews-view')} →`;
+        viewButton.addEventListener('click', () => openTeacherReviewModal(course, profiles, viewButton));
 
-        const heading = document.createElement('p');
-        heading.className = 'font-medium text-black dark:text-white';
-        heading.textContent = t('teacher-reviews-heading');
-        details.appendChild(heading);
+        box.append(copy, viewButton);
+        return box;
+    }
+
+    function buildDcardSearchUrl(courseName, teacher) {
+        const query = ['逢甲', courseName, teacher].filter(Boolean).join(' ');
+        return `https://www.dcard.tw/search?query=${encodeURIComponent(query)}`;
+    }
+
+    function isInsufficientTeacherSummary(summary) {
+        return toPlannerString(summary).trim() === '留言數量不足，資訊有限';
+    }
+
+    function openTeacherReviewModal(course, profiles, trigger) {
+        document.getElementById('teacher-review-modal')?.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'teacher-review-modal';
+        overlay.className = 'fixed inset-0 z-[90] flex items-center justify-center bg-black/55 px-4 py-6';
+
+        const panel = document.createElement('section');
+        panel.className = 'flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card shadow-2xl';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'teacher-review-modal-title');
+
+        const header = document.createElement('div');
+        header.className = 'flex items-start justify-between gap-4 border-b border-notion-border dark:border-dark-border px-5 py-4';
+
+        const titleWrap = document.createElement('div');
+        const title = document.createElement('h3');
+        title.id = 'teacher-review-modal-title';
+        title.className = 'text-base font-semibold text-black dark:text-white';
+        title.textContent = t('teacher-reviews-modal-title');
+        const context = document.createElement('p');
+        context.className = 'mt-1 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+        context.textContent = t('teacher-reviews-modal-context', { course: course.course });
+        titleWrap.append(title, context);
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'h-9 w-9 shrink-0 rounded-md text-xl text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border';
+        closeButton.textContent = '×';
+        closeButton.setAttribute('aria-label', t('teacher-reviews-close'));
+        header.append(titleWrap, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'overflow-y-auto px-5 py-4';
 
         const disclaimer = document.createElement('p');
-        disclaimer.className = 'leading-relaxed';
+        disclaimer.className = 'rounded-md bg-notion-bg-secondary dark:bg-dark-bg-secondary px-3 py-2 text-xs leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary';
         disclaimer.textContent = t('teacher-reviews-disclaimer');
-        details.appendChild(disclaimer);
+        body.appendChild(disclaimer);
 
-        profiles.forEach((profile) => {
-            const profileBox = document.createElement('div');
-            profileBox.className = 'flex flex-col gap-1.5 rounded-md bg-notion-bg-secondary dark:bg-dark-bg-secondary px-3 py-2';
+        const tabs = document.createElement('div');
+        tabs.className = 'mt-4 flex flex-wrap gap-2';
+        const profileContent = document.createElement('div');
+        profileContent.className = 'mt-4';
 
-            if (profiles.length > 1) {
-                const teacherName = document.createElement('p');
-                teacherName.className = 'font-medium text-black dark:text-white';
-                teacherName.textContent = profile.teacher;
-                profileBox.appendChild(teacherName);
-            }
+        function renderProfile(profile, activeButton) {
+            tabs.querySelectorAll('button').forEach((button) => {
+                const active = button === activeButton;
+                button.className = active
+                    ? 'rounded-full bg-black dark:bg-white px-3 py-1.5 text-xs font-medium text-white dark:text-black'
+                    : 'rounded-full border border-notion-border dark:border-dark-border px-3 py-1.5 text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border';
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
 
-            const source = document.createElement('p');
+            profileContent.replaceChildren();
+
+            const profileMeta = document.createElement('div');
+            profileMeta.className = 'mb-2 flex flex-wrap items-center gap-2 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
+            const source = document.createElement('span');
             source.textContent = t('teacher-reviews-source', { n: profile.courseCount });
-            profileBox.appendChild(source);
-
-            if (profile.signals.length) {
-                const signals = document.createElement('p');
-                signals.textContent = t('teacher-reviews-signals', {
-                    signals: profile.signals.map((signal) => t(signal.key)).join(t('teacher-reviews-separator')),
-                });
-                profileBox.appendChild(signals);
-            }
+            profileMeta.appendChild(source);
+            profile.signals.forEach((signal) => {
+                const chip = document.createElement('span');
+                chip.className = 'rounded-full bg-notion-bg-secondary dark:bg-dark-bg-secondary px-2 py-1';
+                chip.textContent = t(signal.key);
+                profileMeta.appendChild(chip);
+            });
+            profileContent.appendChild(profileMeta);
 
             profile.entries.forEach((entry) => {
-                const entryDetails = document.createElement('details');
-                entryDetails.className = 'rounded border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card px-2 py-1.5';
+                const entryBlock = document.createElement('section');
+                entryBlock.className = 'border-b border-notion-border dark:border-dark-border py-4 last:border-b-0';
 
-                const entryHeading = document.createElement('summary');
-                entryHeading.className = 'cursor-pointer font-medium text-black dark:text-white';
-                entryHeading.textContent = entry.course;
-                entryDetails.appendChild(entryHeading);
+                const entryTitle = document.createElement('h4');
+                entryTitle.className = 'text-sm font-semibold text-black dark:text-white';
+                entryTitle.textContent = entry.course;
+                entryBlock.appendChild(entryTitle);
 
                 if (entry.style) {
                     const style = document.createElement('p');
-                    style.className = 'mt-1.5';
+                    style.className = 'mt-1 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
                     style.textContent = t('reviews-style', { v: entry.style });
-                    entryDetails.appendChild(style);
+                    entryBlock.appendChild(style);
                 }
 
-                const summary = document.createElement('p');
-                summary.className = 'mt-1 leading-relaxed';
-                summary.textContent = entry.summary;
-                entryDetails.appendChild(summary);
-                profileBox.appendChild(entryDetails);
+                const review = document.createElement('p');
+                review.className = 'mt-2 text-sm leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary';
+                review.textContent = isInsufficientTeacherSummary(entry.summary)
+                    ? t('teacher-reviews-insufficient')
+                    : entry.summary;
+                entryBlock.appendChild(review);
+
+                const links = document.createElement('div');
+                links.className = 'mt-3 flex flex-wrap gap-2';
+
+                entry.sources.forEach((reviewSource, index) => {
+                    const sourceLink = document.createElement('a');
+                    sourceLink.href = reviewSource.url;
+                    sourceLink.target = '_blank';
+                    sourceLink.rel = 'noopener noreferrer';
+                    sourceLink.className = 'rounded-md bg-notion-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90';
+                    sourceLink.textContent = t('teacher-reviews-open-source', { n: index + 1 });
+                    links.appendChild(sourceLink);
+                });
+
+                const searchLink = document.createElement('a');
+                searchLink.href = buildDcardSearchUrl(entry.course, profile.teacher);
+                searchLink.target = '_blank';
+                searchLink.rel = 'noopener noreferrer';
+                searchLink.className = 'rounded-md border border-notion-border dark:border-dark-border px-3 py-1.5 text-xs font-medium text-black dark:text-white hover:bg-notion-bg-hover dark:hover:bg-dark-border';
+                searchLink.textContent = t('teacher-reviews-search-dcard');
+                links.appendChild(searchLink);
+
+                entryBlock.appendChild(links);
+                profileContent.appendChild(entryBlock);
             });
+        }
 
-            details.appendChild(profileBox);
+        profiles.forEach((profile, index) => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.textContent = profile.teacher;
+            tab.setAttribute('role', 'tab');
+            tab.addEventListener('click', () => renderProfile(profile, tab));
+            tabs.appendChild(tab);
+            if (index === 0) renderProfile(profile, tab);
         });
 
-        toggle.addEventListener('click', () => {
-            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
-            toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-            toggle.textContent = isOpen ? closedLabel : t('teacher-reviews-collapse');
-            details.classList.toggle('hidden', isOpen);
-        });
+        body.append(tabs, profileContent);
+        panel.append(header, body);
+        overlay.appendChild(panel);
 
-        box.appendChild(details);
-        return box;
+        const previousOverflow = document.body.style.overflow;
+        const close = () => {
+            document.removeEventListener('keydown', onKeydown);
+            document.body.style.overflow = previousOverflow;
+            overlay.remove();
+            trigger?.focus();
+        };
+        const onKeydown = (event) => {
+            if (event.key === 'Escape') close();
+        };
+        closeButton.addEventListener('click', close);
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) close();
+        });
+        document.addEventListener('keydown', onKeydown);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+        closeButton.focus();
     }
 
     function createCardExperience(course) {
@@ -1453,7 +1620,7 @@
         const tagsWrapper = document.createElement('div');
         tagsWrapper.className = 'flex flex-wrap gap-2';
         if (course.tagMeta.length) {
-            course.tagMeta.slice(0, 8).forEach((meta) => {
+            course.tagMeta.slice(0, 3).forEach((meta) => {
                 const tagChip = document.createElement('span');
                 const color = TAG_COLOR_MAP[meta.label];
                 if (meta.confidence === 'low') {
@@ -1465,7 +1632,7 @@
                 tagChip.textContent = meta.label;
                 tagsWrapper.appendChild(tagChip);
             });
-            const remaining = course.tagMeta.length - 8;
+            const remaining = course.tagMeta.length - 3;
             if (remaining > 0) {
                 const moreChip = document.createElement('span');
                 moreChip.className = 'notion-tag bg-notion-bg-secondary dark:bg-dark-card text-notion-text-secondary dark:text-dark-text-secondary';
@@ -1482,34 +1649,6 @@
 
         const actionsRow = document.createElement('div');
         actionsRow.className = 'flex gap-1.5';
-
-        const favoriteButton = document.createElement('button');
-        favoriteButton.type = 'button';
-        favoriteButton.className = 'flex-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
-        favoriteButton.style.backgroundColor = '#E57373';
-        favoriteButton.addEventListener('mouseover', () => { favoriteButton.style.backgroundColor = '#C62828'; });
-        favoriteButton.addEventListener('mouseout', () => { favoriteButton.style.backgroundColor = '#E57373'; });
-        favoriteButton.textContent = state.favorites.has(course.id) ? t('unfavorite') : t('favorite');
-        favoriteButton.addEventListener('click', () => {
-            toggleFavorite(course);
-            favoriteButton.textContent = state.favorites.has(course.id) ? t('unfavorite') : t('favorite');
-            if (state.favorites.has(course.id)) {
-                showToast(t('toast-favorited'), 'success');
-            } else {
-                showToast(t('toast-unfavorited'), 'success');
-            }
-        });
-
-        const shareButton = document.createElement('button');
-        shareButton.type = 'button';
-        shareButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
-        shareButton.style.backgroundColor = '#5A5A5A';
-        shareButton.addEventListener('mouseover', () => { shareButton.style.backgroundColor = '#3A3A3A'; });
-        shareButton.addEventListener('mouseout', () => { shareButton.style.backgroundColor = '#5A5A5A'; });
-        shareButton.textContent = t('share');
-        shareButton.addEventListener('click', () => {
-            shareCourse(course);
-        });
 
         const aiResult = document.createElement('div');
         aiResult.className = 'hidden px-3 py-2.5 rounded-md bg-notion-bg-secondary dark:bg-dark-bg-secondary border border-notion-border dark:border-dark-border text-xs text-notion-text dark:text-dark-text leading-relaxed';
@@ -1536,24 +1675,14 @@
         dcardButton.href = `https://www.dcard.tw/search?query=${encodeURIComponent('逢甲 ' + (course.course || '') + (dcardSingleTeacher ? ' ' + dcardSingleTeacher : ''))}`;
         dcardButton.target = '_blank';
         dcardButton.rel = 'noopener noreferrer';
-        dcardButton.className = 'px-2.5 py-1.5 rounded-md text-xs font-medium text-white transition-colors duration-100';
+        dcardButton.className = 'flex-1 px-2.5 py-1.5 rounded-md text-center text-xs font-medium text-white transition-colors duration-100';
         dcardButton.style.backgroundColor = '#006AFF';
         dcardButton.addEventListener('mouseover', () => { dcardButton.style.backgroundColor = '#0055CC'; });
         dcardButton.addEventListener('mouseout', () => { dcardButton.style.backgroundColor = '#006AFF'; });
-        dcardButton.textContent = t('dcard-review');
+        dcardButton.textContent = dcardNameOnly ? t('dcard-course-only') : t('dcard-review');
         if (dcardNameOnly) dcardButton.title = t('dcard-name-only-hint', { n: teacherNames.length });
 
-        actionsRow.append(favoriteButton, shareButton, dcardButton, aiButton);
-
-        // 多位共同授課教師時，明確告知搜尋範圍只有課名，不要讓使用者
-        // 誤以為看到的是這位教師的評價。actionsRow 此時尚未掛上卡片，
-        // 因此先建立，於下方與 actionsRow 一同加入。
-        let dcardNote = null;
-        if (dcardNameOnly) {
-            dcardNote = document.createElement('p');
-            dcardNote.className = 'text-xs text-notion-text-secondary dark:text-dark-text-secondary';
-            dcardNote.textContent = t('dcard-name-only-note', { n: teacherNames.length });
-        }
+        actionsRow.append(dcardButton, aiButton);
 
         // 加入規劃按鈕（獨立一行，有框框）
         const addToPlanRow = document.createElement('div');
@@ -1712,7 +1841,7 @@
         });
 
         addToPlanRow.appendChild(addToPlanBtn);
-        actions.append(actionsRow, ...(dcardNote ? [dcardNote] : []), addToPlanRow, aiResult);
+        actions.append(actionsRow, addToPlanRow, aiResult);
         return actions;
     }
 
