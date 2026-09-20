@@ -1,6 +1,6 @@
 # 逢甲選課助手（Course Search）
 
-這個專案提供一個前端搜尋介面與 Node.js 後端代理服務，協助在不暴露 AI API Key 的情況下提供 AI 修課分析。
+這個專案提供課程搜尋、學生心得、官方課程資訊、AI 修課分析與動態課表規劃。前端部署於 Vercel，Node.js 後端負責 NID OAuth、資料儲存、逢甲官方資料代理與 AI 呼叫，避免把 API Key 暴露在瀏覽器。
 
 ## 重要提醒
 
@@ -12,9 +12,11 @@
 ```
 前端 (Vercel)          後端 (Railway)
 public/               server.js
-  index.html    →  →    /api/analyze
-  app.js              /api/planner-keywords
-  config.js           /api/auth/login  (NID 登入，目前為假 endpoint)
+  index.html    →  →    /api/auth/nid-*
+  app.js              /api/analyze
+  config.js           /api/planner-*
+                      /api/course-grade-rules
+                      /api/favorites、/api/planners
 ```
 
 ## 本地開發（前後端合一）
@@ -62,6 +64,14 @@ public/               server.js
 
    伺服器預設跑在 `http://localhost:3000`。
 
+5. **執行測試**
+
+   ```bash
+   npm test
+   ```
+
+   測試會檢查 JavaScript 語法、後端健康狀態、主要頁面、登入保護、NID 登入網址，以及三份課程資料的基本完整性。
+
 ## 部署：前端（Vercel）+ 後端（Railway）
 
 ### 後端部署到 Railway
@@ -69,9 +79,13 @@ public/               server.js
 1. 在 Railway 建立新專案，連結此 repo
 2. Railway 會自動偵測 Node.js 並執行 `npm start`
 3. 在 Railway 的環境變數設定頁加入：
+   - `DATABASE_URL`：Railway PostgreSQL 連線字串
    - `ANTHROPIC_API_KEY`（或 `OPENAI_API_KEY`）
    - 使用 OpenRouter 時加上 `AI_PROVIDER=openai`、`OPENAI_BASE_URL=https://openrouter.ai/api/v1`、OpenRouter model id，以及 PDF 辨識用的 `OPENROUTER_PDF_MODEL`
    - `CORS_ORIGIN`：填入你的 Vercel 前端網址，例如 `https://your-app.vercel.app`
+   - `NID_CLIENT_ID` 與 `NID_CALLBACK_URL`：逢甲 NID OAuth 設定
+   - `JWT_SECRET`：不可使用範例值，請使用足夠長的隨機字串
+   - `RESEND_API_KEY` 與 `FEEDBACK_EMAIL`：選填，供意見回饋寄信使用
 4. 取得 Railway 提供的後端網址（例如 `https://your-backend.railway.app`）
 
 > Railway 需要的設定：已有 `package.json` 的 `start` script，不需要額外的 `railway.json`。
@@ -91,6 +105,14 @@ public/               server.js
 > 若要讓 `config.js` 跟著 repo 一起部署，可從 `.gitignore` 移除 `public/config.js`，但要確保檔案內不含 API key。
 
 ## 後端 API
+
+### `GET /api/health`
+
+供 Railway 健康檢查與自動化測試確認服務已啟動，不會呼叫資料庫或外部 AI。
+
+```json
+{ "ok": true, "service": "course-search" }
+```
 
 ### `POST /api/analyze`
 
@@ -112,6 +134,10 @@ AI 分析課程是否適合修。
 { "userContext": "我是資工系大二，想加強演算法與資料庫" }
 ```
 
+### `POST /api/planner-pdf`
+
+接收已登入使用者的課表 PDF，交由設定的 OpenAI-compatible／OpenRouter 模型辨識課名、教師、學分與節次。原始 PDF 不會寫入本站資料庫。
+
 ### `GET /api/course-grade-rules`
 
 依學期與選課代碼，從逢甲公開教學大綱取得評分項目與百分比。伺服器會快取結果，
@@ -131,13 +157,39 @@ AI 分析課程是否適合修。
 }
 ```
 
-### `POST /api/auth/login`
+### `GET /api/auth/nid-url`
 
-**目前為假 endpoint**，之後會替換成逢甲大學 NID OAuth。
+取得逢甲 NID OAuth 登入網址，前端會將使用者導向逢甲登入頁。
 
-```json
-{ "username": "student_id", "password": "password" }
+### `POST /api/auth/nid-callback`
+
+接收逢甲 OAuth 回傳的 `user_code`，在期限內向逢甲 API 取得使用者資料，建立或更新本站使用者並簽發 JWT。本站不會接收或儲存使用者的 NID 密碼。
+
+### `GET /api/auth/me`
+
+驗證現有 JWT 並回傳目前登入者資料。
+
+## PDF 與個人資料說明
+
+- 課表 PDF 會經過本站後端傳送至設定的第三方 AI 服務進行辨識。
+- 本站不會把原始 PDF 寫入資料庫或永久保存，但第三方服務仍可能依其服務條款處理請求內容。
+- 上傳前應遮蔽辨識課程不需要的個人資料。
+- 本站資料庫會保存登入者基本 NID 資料、收藏、AI 分析紀錄、已儲存課表與使用者主動送出的意見回饋。
+- 正式上線前應確認實際使用的 AI 供應商資料政策，並讓正式隱私權說明與部署設定一致。
+
+## 自動化測試與 GitHub Actions
+
+本機執行：
+
+```bash
+npm test
 ```
+
+其中：
+
+- `npm run check` 檢查後端與前端 JavaScript 語法。
+- `node --test` 執行 API、靜態頁面、登入保護、NID OAuth 網址、課程資料及多語隱私文字測試。
+- `.github/workflows/ci.yml` 會在每個 Pull Request 與推送到 `main` 時自動執行相同測試；全部通過後才適合合併。
 
 ## 更新 Dcard 心得與原文來源
 
@@ -163,7 +215,10 @@ AI 分析課程是否適合修。
 
 - **永遠不要**把 API Key 寫在前端或提交到版本控制
 - 部署後設定 `CORS_ORIGIN` 限制只允許你的前端網址
-- NID OAuth 整合完成前，`/api/auth/login` 任何帳密都會登入成功，請勿在正式環境使用
+- 正式環境必須設定高強度 `JWT_SECRET`，不可沿用 `.env.example` 的範例值
+- NID 登入只透過逢甲官方 OAuth；本站不應建立收集 NID 密碼的表單或 endpoint
+- NID API Key 每年 7/31 到期，續期後要重新驗證登入 callback
+- 課表 PDF 可能含個人資料，必須維持上傳前的隱私告知並避免記錄原始檔案內容
 
 ## 專案結構
 
@@ -177,6 +232,8 @@ course-search/
 │   ├── config.example.js       # config.js 樣板
 │   └── *.json                  # 課程資料
 ├── scripts/                    # 資料處理腳本
+├── tests/                      # Node.js 自動化測試
+├── .github/workflows/ci.yml    # PR 與 main 的自動測試
 ├── server.js                   # Express 後端（部署到 Railway）
 ├── vercel.json                 # Vercel 前端部署設定
 ├── .env.example                # 環境變數樣板

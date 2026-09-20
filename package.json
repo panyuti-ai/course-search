@@ -5,6 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js && node --check public/i18n.js",
+    "test": "npm run check && node --test",
     "merge-data": "node scripts/mergeCourses.js",
     "scrape-fcu": "node scripts/scrapeFcu.js",
     "crawl-dcard": "node scripts/crawl-dcard.mjs",
