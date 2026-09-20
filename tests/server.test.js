@@ -41,7 +41,13 @@ test('the main page and core frontend assets are served', async () => {
   assert.match(html, /id="planner-view"/);
   assert.match(html, /id="floating-timetable"/);
   assert.match(html, /data-i18n-text="pdf-privacy-notice"/);
+  assert.match(html, /src="fcu-seal\.png"/);
   assert.match(html, /src="app\.js"/);
+
+  const logoResponse = await fetch(`${baseUrl}/fcu-seal.png`);
+  assert.equal(logoResponse.status, 200);
+  assert.match(logoResponse.headers.get('content-type') || '', /^image\/png/);
+  assert.ok((await logoResponse.arrayBuffer()).byteLength > 1000);
 });
 
 test('protected planner APIs reject anonymous requests', async () => {
@@ -64,4 +70,3 @@ test('NID login URL uses the official FCU OAuth host', async () => {
   assert.ok(loginUrl.searchParams.get('client_id'));
   assert.ok(loginUrl.searchParams.get('client_url'));
 });
-

@@ -6512,7 +6512,9 @@
         wall.className = 'fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-dark-bg';
         wall.innerHTML = `
             <div class="text-center max-w-sm px-6">
-                <div class="w-14 h-14 rounded-xl bg-notion-accent flex items-center justify-center text-white font-bold text-lg mx-auto mb-5">FCU</div>
+                <div class="w-24 h-24 rounded-full bg-white p-2 shadow-md ring-1 ring-black/10 overflow-hidden mx-auto mb-5">
+                    <img src="fcu-seal.png" alt="逢甲大學校徽" class="w-full h-full object-contain" />
+                </div>
                 <h1 class="text-xl font-semibold mb-2">逢甲選課助手</h1>
                 <p class="text-sm text-notion-text-secondary dark:text-dark-text-secondary mb-6">
                     請使用逢甲 NID 帳號登入，以記錄你的選課紀錄。
