@@ -43,3 +43,25 @@ test('every supported language includes the PDF privacy notice', async () => {
   const matches = i18nSource.match(/'pdf-privacy-notice':/g) || [];
   assert.equal(matches.length, 5);
 });
+
+test('confirmation and toast messages exist in every supported language', async () => {
+  const i18nSource = await readFile(new URL('../public/i18n.js', import.meta.url), 'utf8');
+  const keys = [
+    'clear-favorites-title',
+    'clear-favorites-confirm',
+    'favorites-cleared',
+    'planner-export-empty',
+    'planner-unpin-title',
+    'planner-unpin-action'
+  ];
+
+  for (const key of keys) {
+    const matches = i18nSource.match(new RegExp(`'${key}':`, 'g')) || [];
+    assert.equal(matches.length, 5, `${key} should exist in all five languages`);
+  }
+});
+
+test('frontend does not use native alert or confirm dialogs', async () => {
+  const appSource = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(appSource, /\b(?:alert|confirm)\s*\(/);
+});
