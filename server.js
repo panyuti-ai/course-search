@@ -76,7 +76,9 @@ async function initDB() {
   `);
   console.log("DB tables ready");
 }
-initDB().catch(console.error);
+if (process.env.NODE_ENV !== "test") {
+  initDB().catch(console.error);
+}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -241,6 +243,11 @@ app.use(
 );
 
 app.use(express.json({ limit: "15mb" }));
+
+// 給部署平台與自動化測試使用；不碰資料庫或外部 AI，能快速確認服務已啟動。
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, service: "course-search" });
+});
 
 const analyzeRateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -1040,6 +1047,10 @@ app.use((req, res) => {
   res.status(404).json({ error: "Not Found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Course search backend running on http://localhost:${PORT} (AI provider: ${AI_PROVIDER})`);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log(`Course search backend running on http://localhost:${PORT} (AI provider: ${AI_PROVIDER})`);
+  });
+}
+
+export { app };

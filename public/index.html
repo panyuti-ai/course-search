@@ -303,6 +303,12 @@
                                 </button>
                                 <span id="planner-file-name" class="text-sm text-notion-text-secondary dark:text-dark-text-secondary truncate" data-i18n-text="no-file-selected">未選擇任何檔案</span>
                             </div>
+                            <p class="flex items-start gap-2 rounded-md bg-notion-accent-light/60 dark:bg-notion-accent/10 px-3 py-2 text-xs leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary">
+                                <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-notion-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l7 3v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3zm-3 9l2 2 4-4"></path>
+                                </svg>
+                                <span data-i18n-text="pdf-privacy-notice">PDF 會傳送至第三方 AI 服務進行辨識；本站不會永久保存原始檔案。若檔案含不必要的個人資料，請先遮蔽。</span>
+                            </p>
                             <span id="planner-uploaded-credits" class="hidden text-xs text-notion-text-secondary dark:text-dark-text-secondary"></span>
                         </div>
                     </div>
@@ -611,7 +617,6 @@
     </button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="config.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 
