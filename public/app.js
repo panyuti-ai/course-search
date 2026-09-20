@@ -791,7 +791,7 @@
         if (plannerSaveBtn) {
             plannerSaveBtn.addEventListener('click', async () => {
                 const selectedCourses = Array.from(state.planner.selected?.values() || []);
-                if (!selectedCourses.length) { alert(t('no-courses-alert')); return; }
+                if (!selectedCourses.length) { showToast(t('no-courses-alert'), 'error'); return; }
                 const courses = serializePlannerStateForSave();
                 const name = prompt(t('enter-plan-name'), `${t('default-plan-name')} ${new Date().toLocaleDateString()}`);
                 if (!name) return;
@@ -2148,6 +2148,7 @@
         const bgClass = type === 'success' ? 'bg-notion-text dark:bg-dark-text' : 'bg-notion-red';
         const textClass = type === 'success' ? 'text-white dark:text-dark-bg' : 'text-white';
         toast.className = `${bgClass} ${textClass} px-5 py-3 rounded-lg shadow-md flex items-center gap-2 text-sm font-medium transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
         const messageNode = document.createElement('span');
         messageNode.textContent = message;
@@ -2184,6 +2185,121 @@
         dismissTimer = setTimeout(dismiss, Number(options.duration) || 3000);
         return { dismiss };
     }
+
+    // 共用確認視窗：取代瀏覽器原生確認框，並維持深淺色、鍵盤與焦點操作一致。
+    function showConfirmDialog({
+        title,
+        message,
+        confirmLabel,
+        cancelLabel = t('cancel'),
+        tone = 'danger',
+        icon = '!',
+    }) {
+        document.querySelector('#site-confirm-dialog [data-dialog-cancel]')?.click();
+
+        return new Promise((resolve) => {
+            const previouslyFocused = document.activeElement;
+            const bodyWasLocked = document.body.classList.contains('overflow-hidden');
+            let settled = false;
+
+            const overlay = document.createElement('div');
+            overlay.id = 'site-confirm-dialog';
+            overlay.className = 'fixed inset-0 z-[90] flex items-center justify-center bg-black/55 px-4 py-6 opacity-0 transition-opacity duration-150';
+
+            const panel = document.createElement('section');
+            panel.className = 'w-full max-w-sm translate-y-2 scale-[0.98] rounded-xl border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card p-5 shadow-2xl opacity-0 transition-all duration-150';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-labelledby', 'site-confirm-dialog-title');
+            panel.setAttribute('aria-describedby', 'site-confirm-dialog-message');
+
+            const iconNode = document.createElement('div');
+            iconNode.className = tone === 'danger'
+                ? 'mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-lg font-bold text-notion-red dark:bg-red-950/40'
+                : 'mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-lg font-bold text-notion-accent dark:bg-sky-950/40';
+            iconNode.textContent = icon;
+            iconNode.setAttribute('aria-hidden', 'true');
+
+            const titleNode = document.createElement('h4');
+            titleNode.id = 'site-confirm-dialog-title';
+            titleNode.className = 'text-base font-semibold text-notion-text dark:text-dark-text';
+            titleNode.textContent = title;
+
+            const messageNode = document.createElement('p');
+            messageNode.id = 'site-confirm-dialog-message';
+            messageNode.className = 'mt-2 whitespace-pre-line text-sm leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary';
+            messageNode.textContent = message;
+
+            const actions = document.createElement('div');
+            actions.className = 'mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
+
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.dataset.dialogCancel = '';
+            cancelButton.className = 'min-h-10 rounded-lg border border-notion-border dark:border-dark-border px-4 text-sm font-medium hover:bg-notion-bg-hover dark:hover:bg-dark-border focus:outline-none focus:ring-2 focus:ring-notion-accent focus:ring-offset-2 dark:focus:ring-offset-dark-card';
+            cancelButton.textContent = cancelLabel;
+
+            const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = tone === 'danger'
+                ? 'min-h-10 rounded-lg bg-notion-red px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-notion-red focus:ring-offset-2 dark:focus:ring-offset-dark-card'
+                : 'min-h-10 rounded-lg bg-notion-accent px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-notion-accent focus:ring-offset-2 dark:focus:ring-offset-dark-card';
+            confirmButton.textContent = confirmLabel;
+
+            const finish = (confirmed) => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', handleKeydown);
+                overlay.classList.add('opacity-0');
+                panel.classList.add('translate-y-2', 'scale-[0.98]', 'opacity-0');
+                if (!bodyWasLocked) document.body.classList.remove('overflow-hidden');
+                setTimeout(() => {
+                    overlay.remove();
+                    if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
+                        previouslyFocused.focus();
+                    }
+                    resolve(confirmed);
+                }, 150);
+            };
+
+            const handleKeydown = (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finish(false);
+                    return;
+                }
+                if (event.key !== 'Tab') return;
+                const focusable = [cancelButton, confirmButton];
+                const currentIndex = focusable.indexOf(document.activeElement);
+                const nextIndex = event.shiftKey
+                    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+                    : (currentIndex >= focusable.length - 1 ? 0 : currentIndex + 1);
+                event.preventDefault();
+                focusable[nextIndex].focus();
+            };
+
+            cancelButton.addEventListener('click', () => finish(false));
+            confirmButton.addEventListener('click', () => finish(true));
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) finish(false);
+            });
+            document.addEventListener('keydown', handleKeydown);
+
+            actions.append(cancelButton, confirmButton);
+            panel.append(iconNode, titleNode, messageNode, actions);
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+            document.body.classList.add('overflow-hidden');
+
+            requestAnimationFrame(() => {
+                overlay.classList.remove('opacity-0');
+                panel.classList.remove('translate-y-2', 'scale-[0.98]', 'opacity-0');
+                cancelButton.focus();
+            });
+        });
+    }
+
+    window.showToast = showToast;
 
     function copyCourseInfo(course) {
         const isDuplicate = course.difficulty !== null && String(course.difficulty) === String(course.score);
@@ -2321,15 +2437,24 @@
         document.body.classList.remove('overflow-hidden');
     }
 
-    function clearFavorites() {
+    async function clearFavorites() {
         if (!state.favorites.size) return;
-        if (!confirm(t('confirm-clear-favorites'))) return;
+        const confirmed = await showConfirmDialog({
+            title: t('clear-favorites-title'),
+            message: t('confirm-clear-favorites'),
+            confirmLabel: t('clear-favorites-confirm'),
+            tone: 'danger',
+            icon: '×',
+        });
+        if (!confirmed) return;
         const ids = [...state.favorites.keys()];
         state.favorites.clear();
         ids.forEach((id) => {
             (window.authFetch || fetch)(`${window.API_BASE_URL || ''}/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(console.warn);
         });
         updateFavoritesUI();
+        runSearch({ force: state.hasSearched });
+        showToast(t('favorites-cleared'), 'success');
     }
 
     function initializePlannerSection() {
@@ -4101,12 +4226,19 @@
 
     // 解除固定：課程仍留在課表上，但之後可以移除。
     // 不會立刻重排，使用者可自行移除後再加課，或重新產生課表。
-    function plannerUnpinCourse(courseId) {
+    async function plannerUnpinCourse(courseId) {
         const course = findPlannerCourse(courseId);
         if (!course || !course.pinned) return;
 
         // 解除之後就可能被移除，先讓使用者確認
-        if (!confirm(t('planner-unpin-confirm', { name: course.course }))) return;
+        const confirmed = await showConfirmDialog({
+            title: t('planner-unpin-title'),
+            message: t('planner-unpin-confirm', { name: course.course }),
+            confirmLabel: t('planner-unpin-action'),
+            tone: 'default',
+            icon: '🔓',
+        });
+        if (!confirmed) return;
 
         state.planner.unpinnedCourses.add(course.course);
         setPlannerCoursePinned(course.course, false);
@@ -4621,7 +4753,7 @@
         const allCourses = Array.from(courseByName.values());
 
         if (!allCourses.length) {
-            alert('目前沒有課程可以匯出。');
+            showToast(t('planner-export-empty'), 'error');
             return;
         }
 
@@ -4767,76 +4899,23 @@
         });
     }
 
-    function showPlannerRemoveConfirm(courseId) {
+    async function showPlannerRemoveConfirm(courseId) {
         const course = state.planner.selected.get(courseId);
         if (!course) return;
         if (course.pinned) {
             showToast(t('pinned-no-remove'), 'error');
             return;
         }
-
-        document.getElementById('planner-remove-confirm')?.remove();
-
-        const overlay = document.createElement('div');
-        overlay.id = 'planner-remove-confirm';
-        overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6';
-
-        const panel = document.createElement('section');
-        panel.className = 'w-full max-w-sm rounded-xl border border-notion-border dark:border-dark-border bg-white dark:bg-dark-card p-5 shadow-2xl';
-        panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-modal', 'true');
-        panel.setAttribute('aria-labelledby', 'planner-remove-confirm-title');
-
-        const icon = document.createElement('div');
-        icon.className = 'mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-lg text-notion-red dark:bg-red-950/40';
-        icon.textContent = '−';
-        icon.setAttribute('aria-hidden', 'true');
-
-        const title = document.createElement('h4');
-        title.id = 'planner-remove-confirm-title';
-        title.className = 'text-base font-semibold text-notion-text dark:text-dark-text';
-        title.textContent = t('remove-course-title');
-
-        const message = document.createElement('p');
-        message.className = 'mt-2 text-sm leading-relaxed text-notion-text-secondary dark:text-dark-text-secondary';
-        message.textContent = t('remove-course-message', { name: course.course });
-
-        const actions = document.createElement('div');
-        actions.className = 'mt-5 flex justify-end gap-2';
-
-        const cancelButton = document.createElement('button');
-        cancelButton.type = 'button';
-        cancelButton.className = 'min-h-10 rounded-lg border border-notion-border dark:border-dark-border px-4 text-sm font-medium hover:bg-notion-bg-hover dark:hover:bg-dark-border';
-        cancelButton.textContent = t('cancel');
-
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.className = 'min-h-10 rounded-lg bg-notion-red px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-notion-red focus:ring-offset-2 dark:focus:ring-offset-dark-card';
-        removeButton.textContent = t('remove-course-confirm');
-
-        const close = () => {
-            document.removeEventListener('keydown', handleEscape);
-            overlay.remove();
-        };
-        const handleEscape = (event) => {
-            if (event.key === 'Escape') close();
-        };
-        cancelButton.addEventListener('click', close);
-        removeButton.addEventListener('click', () => {
-            close();
-            plannerRemoveCourse(course.id);
-            showToast(t('removed-from-plan', { name: course.course }), 'success');
+        const confirmed = await showConfirmDialog({
+            title: t('remove-course-title'),
+            message: t('remove-course-message', { name: course.course }),
+            confirmLabel: t('remove-course-confirm'),
+            tone: 'danger',
+            icon: '−',
         });
-        overlay.addEventListener('click', (event) => {
-            if (event.target === overlay) close();
-        });
-        document.addEventListener('keydown', handleEscape);
-
-        actions.append(cancelButton, removeButton);
-        panel.append(icon, title, message, actions);
-        overlay.appendChild(panel);
-        document.body.appendChild(overlay);
-        requestAnimationFrame(() => cancelButton.focus());
+        if (!confirmed) return;
+        plannerRemoveCourse(course.id);
+        showToast(t('removed-from-plan', { name: course.course }), 'success');
     }
 
     function showPlannerSlotPicker(slotKey, dayLabel, period) {
@@ -6471,7 +6550,7 @@
             const data = await res.json();
             if (data.url) window.location.href = data.url;
         } catch {
-            alert(t('login-failed'));
+            window.showToast?.(t('login-failed'), 'error', { duration: 4500 });
         }
     }
 
