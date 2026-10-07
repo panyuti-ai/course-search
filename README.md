@@ -122,7 +122,7 @@ AI 分析課程是否適合修。
 ### `GET /api/course-grade-rules`
 
 依學期與選課代碼，從逢甲公開教學大綱取得評分項目與百分比。伺服器會快取結果，
-課程卡片只在使用者展開「評分方式」時查詢。
+此端點保留供既有用戶端使用；目前課程詳細頁透過 `/api/course-outline` 取得完整大綱與配分。
 
 ```text
 /api/course-grade-rules?semester=115-1&selCode=0870
@@ -157,6 +157,53 @@ AI 分析課程是否適合修。
 - 上傳前應遮蔽辨識課程不需要的個人資料。
 - 本站資料庫會保存登入者基本 NID 資料、收藏、AI 分析紀錄、已儲存課表與使用者主動送出的意見回饋。
 - 正式上線前應確認實際使用的 AI 供應商資料政策，並讓正式隱私權說明與部署設定一致。
+
+## 課程大綱、配分與摘要
+
+搜尋卡片保留課名、教師、學分、時間及短簡介。點擊「課程詳情」可查看課程重點、
+評分方式、官方大綱與學生心得；AI 修課分析、Dcard、複製與加入課表操作也集中在詳情中。
+手機使用底部詳情面板，支援鍵盤分頁、Escape 關閉與回復焦點。
+
+115-1 官方資料抓取（預設最多 2 個並行工作，可續跑）：
+
+```bash
+npm run crawl-outlines -- --semester 115-1
+```
+
+程式依學期＋選課代碼，透過 `CourseOutline.aspx` 取得短效 token，再呼叫
+`GetCourseDetail`。只保存課程介紹、教學目標、每週進度、教材、官方配分及配分說明，
+不保存 token、教師聯絡資訊或原始回應。會驗證回應的課程身分，逐筆原子寫入
+`public/course_outlines.json`；失敗不刪除已完成資料，連續 3 次失敗會停止。
+`--limit 20` 可先小批驗證，`--refresh` 更新既有資料，`--concurrency 1` 降低並行量。
+停止後重跑會跳過已保存資料；不要同時啟動兩個寫入相同檔案的爬蟲。
+
+官方資料抓取完成後，再執行 AI 整理：
+
+```bash
+npm run summarize-outlines -- --semester 115-1 --limit 20
+# 確認小批內容後，移除 --limit 即可繼續完成其餘課程。
+```
+
+沿用 `AI_PROVIDER`、`ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY`。也可設定專用的
+`COURSE_SUMMARY_PROVIDER=anthropic|openai`、`COURSE_SUMMARY_API_KEY`、
+`COURSE_SUMMARY_MODEL` 與 `COURSE_SUMMARY_BASE_URL`。
+OpenRouter 可用 `COURSE_SUMMARY_PROVIDER=openai`，搭配
+`COURSE_SUMMARY_BASE_URL=https://openrouter.ai/api/v1` 與相應模型。
+金鑰只透過環境設定提供，不能寫入前端、資料檔或版本控制。
+批次摘要會產生供應商 API 費用，可先用 `--limit` 控制處理量。
+
+摘要以官方內容為依據，只整理一句短摘要、最多 5 項學習範圍與 3 個主題。
+配分數字和說明直接引用官方資料，不由 AI 推估。原始大綱沒有提供學習內容時不生成摘要。
+只有簡短介紹時可保留摘要，但不強制湊滿學習範圍；空白範圍會在詳情中標示。
+摘要帶有來源內容雜湊；官方資料改變後，舊摘要不再顯示，需要重新整理。
+課名與官方內容雜湊完全相同時，可共用已驗證的摘要，減少重複付費呼叫。
+純摘要批次可用 `--concurrency 6`；官方抓取仍限制最多 3 個並行工作。
+沒有 AI 金鑰時仍可抓取與查看官方內容，介面會標示摘要尚未完成。
+
+`GET /api/course-outlines?semester=115-1` 回傳卡片用的輕量索引與實際抓取／摘要覆蓋數，
+`GET /api/course-outline?semester=115-1&selCode=0869` 回傳單門完整資料。
+一般瀏覽不會觸發付費 AI 呼叫。尚未保存的大綱會在查看詳情時查詢官方 API，
+查詢具有限流、快取與同課程請求合併；失敗可重試或開啟官方原文。
 
 ## 自動化測試與 GitHub Actions
 

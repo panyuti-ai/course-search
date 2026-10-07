@@ -9,6 +9,8 @@ import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import { Resend } from "resend";
+import { readFile } from 'node:fs/promises';
+import { fetchOutline, readOutlines, outlineKey, validCourseIdentity } from './lib/course-outlines.js';
 const { Pool } = pg;
 
 dotenv.config();
@@ -279,6 +281,69 @@ const FCU_COURSE_OUTLINE_URL = "https://coursesearch02.fcu.edu.tw/CourseOutline.
 const FCU_COURSE_DETAIL_URL = "https://ilearntools.fcu.edu.tw/W320104/W320104_syllabus.aspx/GetCourseDetail";
 const COURSE_GRADE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const courseGradeCache = new Map();
+
+// Static, precomputed summaries: visiting a course never triggers a paid AI call.
+let outlineCatalog;
+async function getOutlineCatalog() {
+  if (!outlineCatalog) {
+    outlineCatalog = readFile(new URL('./public/fcu_courses.json', import.meta.url), 'utf8')
+      .then(text => new Map(JSON.parse(text).map(course => [outlineKey(course.semester, course.selCode), course])))
+      .catch(error => { outlineCatalog = undefined; throw error; });
+  }
+  return outlineCatalog;
+}
+const liveOutlines = new Map();
+const pendingOutlines = new Map();
+app.get('/api/course-outlines', async (req, res) => {
+  const semester = String(req.query.semester || '115-1');
+  if (!validCourseIdentity(semester, '0001')) return res.status(400).json({error:'Invalid semester'});
+  try {
+    const [data, catalog] = await Promise.all([readOutlines(), getOutlineCatalog()]);
+    const previews = {};
+    const courses = [...catalog.values()].filter(course => course.semester === semester);
+    for (const course of courses) {
+      const key = outlineKey(course.semester, course.selCode);
+      const record = data.records[key];
+      if (!record) continue;
+      const ai = record.ai?.sourceHash === record.contentHash ? record.ai : null;
+      const original=record.description || record.objectives?.[0] || '';
+      previews[key] = {summary:ai?.summary || (original ? original.slice(0,100)+(original.length>100?'…':'') : ''), tags:ai?.tags || [],
+        gradeRules:(record.gradeRules || []).map(({name,percentage})=>({name,percentage})), hasAI:Boolean(ai)};
+    }
+    res.json({previews,coverage:{semester,total:courses.length,fetched:Object.keys(previews).length,
+      summarized:Object.values(previews).filter(preview=>preview.hasAI).length}});
+  } catch { res.status(503).json({error:'Course outline dataset unavailable'}); }
+});
+app.get('/api/course-outline', courseGradeRateLimiter, async (req, res) => {
+  const semester=String(req.query.semester || '');
+  const selCode=String(req.query.selCode || '');
+  if (!validCourseIdentity(semester,selCode)) return res.status(400).json({error:'Invalid course identity'});
+  const key=outlineKey(semester,selCode);
+  try {
+    const catalog=await getOutlineCatalog();
+    if (!catalog.has(key)) return res.status(404).json({error:'Course not in catalog'});
+    const data=await readOutlines();
+    let record=data.records[key];
+    if (!record) {
+      const cached=liveOutlines.get(key);
+      if (cached && Date.now()-cached.at < COURSE_GRADE_CACHE_TTL_MS) record=cached.record;
+      else {
+        if (!pendingOutlines.has(key)) {
+          pendingOutlines.set(key,fetchOutline(semester,selCode).then(result=>{
+            if (liveOutlines.size >= 500) liveOutlines.delete(liveOutlines.keys().next().value);
+            liveOutlines.set(key,{record:result,at:Date.now()});return result;
+          }).finally(()=>pendingOutlines.delete(key)));
+        }
+        record=await pendingOutlines.get(key);
+      }
+    }
+    const ai=record.ai?.sourceHash === record.contentHash ? record.ai : null;
+    res.set('Cache-Control','public, max-age=300');
+    res.json({...record,ai});
+  } catch {
+    res.status(502).json({error:'暫時無法取得官方大綱，請稍後重試或查看官方原文。'});
+  }
+});
 
 function cleanOfficialText(value) {
   return String(value ?? "")

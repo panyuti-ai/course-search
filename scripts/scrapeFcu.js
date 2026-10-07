@@ -21,6 +21,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { EnvHttpProxyAgent } from 'undici';
+
+const proxy = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy)
+    ? new EnvHttpProxyAgent() : undefined;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE_URL = process.env.FCU_BASE_URL || 'https://coursesearch02.fcu.edu.tw/Service/Search.asmx';
@@ -53,6 +57,8 @@ function parseArgs() {
 // ── HTTP helper ───────────────────────────────────────────────
 async function post(endpoint, body) {
     const res = await fetch(`${BASE_URL}/${endpoint}`, {
+        dispatcher: proxy,
+        signal: AbortSignal.timeout(25000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify(body),

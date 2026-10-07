@@ -2,6 +2,7 @@ node_modules/
 .env
 scripts/dcard_raw.json
 scripts/dcard_profiles.json
+public/course_outlines.json.*.tmp
 
 # Claude Code 的本機工具允許清單，會隨使用自動改寫，屬個人偏好設定
 .claude/settings.local.json
