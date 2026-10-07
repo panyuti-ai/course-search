@@ -301,11 +301,14 @@
         }
 
         // Load all data sources in parallel; only courses.json is required
-        const [rawCourses, rawFcu, rawReviews] = await Promise.all([
+        const [rawCourses, rawFcu, rawReviews, outlineIndex] = await Promise.all([
             fetchJson('courses.json'),
             fetchJson('fcu_courses.json').catch(() => null),
             fetchJson('course_reviews.json').catch(() => null),
+            fetch(`${window.API_BASE_URL || ''}/api/course-outlines?semester=115-1`, {signal:AbortSignal.timeout(5000)})
+                .then(response => response.ok ? response.json() : null).catch(() => null),
         ]);
+        state.outlinePreviews = outlineIndex?.previews || {};
 
         buildReviewIndex(rawReviews);
 
@@ -503,7 +506,8 @@
         const teacher = item.teacher?.trim() || '';
         const review = item.review?.trim() || '';
         const experience = item.experience?.trim() || '';
-        const matchCorpus = [
+        const outlinePreview = state.outlinePreviews?.[`${item.semester}|${item.selCode}`] || null;
+        const tagCorpus = [
             courseName,
             teacher,
             review,
@@ -514,12 +518,14 @@
             .filter(Boolean)
             .join(' ')
             .toLowerCase();
+        const matchCorpus = [tagCorpus,outlinePreview?.summary || '',(outlinePreview?.tags || []).join(' ')]
+            .filter(Boolean).join(' ').toLowerCase();
 
         // Auto-detect tags from corpus
-        const detectedTags = detectTagsFromCorpus(matchCorpus);
+        const detectedTags = detectTagsFromCorpus(tagCorpus);
         const allTags = [...new Set([...rawTags, ...detectedTags])];
 
-        const tagMeta = buildTagMeta(allTags, matchCorpus, sourceKey);
+        const tagMeta = buildTagMeta(allTags, tagCorpus, sourceKey);
         const reliableTags = tagMeta
             .filter((meta) => meta.confidence === 'high')
             .map((meta) => meta.label);
@@ -529,6 +535,7 @@
 
         return {
             id: createCourseId(item, index),
+            outlinePreview,
             course: courseName,
             teacher,
             review,
@@ -1315,33 +1322,66 @@
 
     function createCourseCard(course) {
         const card = document.createElement('article');
-        card.className = 'notion-card flex flex-col gap-3.5';
-
+        card.className = 'notion-card course-card';
         card.appendChild(createCardHeader(course));
-        const stats = createCardStats(course);
-        if (stats) card.appendChild(stats);
-
-        const officialNote = createCardOfficialNote(course);
-        if (officialNote) card.appendChild(officialNote);
-
-        const gradeRules = createCardGradeRules(course);
-        if (gradeRules) card.appendChild(gradeRules);
-
-        if (course.review) {
-            card.appendChild(createCardReview(course));
+        const facts = document.createElement('div');
+        facts.className = 'course-card-facts';
+        if (course.credits != null) facts.appendChild(createOfficialFact(t('outline-credits'), String(course.credits)));
+        const times = formatCourseTimes(course.times);
+        if (times) facts.appendChild(createOfficialFact(t('time-slot'), times));
+        card.appendChild(facts);
+        const summary = document.createElement('p');
+        summary.className = 'course-card-summary';
+        summary.textContent = course.outlinePreview?.summary || t('outline-card-hint');
+        card.appendChild(summary);
+        if (course.outlinePreview?.hasAI) {
+            const label = document.createElement('span');
+            label.className = 'course-card-ai'; label.textContent = t('outline-ai-label');
+            card.appendChild(label);
         }
-
-        if (course.experience) {
-            card.appendChild(createCardExperience(course));
+        const grades = (course.outlinePreview?.gradeRules || []).slice().sort((a,b)=>b.percentage-a.percentage).slice(0,2);
+        if (grades.length) {
+            const preview = document.createElement('p');
+            preview.className = 'course-card-grades';
+            preview.textContent = grades.map(rule=>`${rule.name} ${rule.percentage}%`).join(' · ');
+            card.appendChild(preview);
         }
-
-        const studentReview = createCardStudentReview(course);
-        if (studentReview) card.appendChild(studentReview);
-
         card.appendChild(createCardTags(course));
-        card.appendChild(createCardActions(course));
-
+        const details = document.createElement('button');
+        details.type = 'button'; details.className = 'course-card-details';
+        details.textContent = `${t('outline-details')} →`;
+        details.setAttribute('aria-label', `${t('outline-details')}：${course.course}`);
+        details.addEventListener('click', () => openCourseDetails(course, details));
+        card.appendChild(details);
         return card;
+    }
+
+    function openCourseDetails(course, trigger) {
+        window.CourseDetails?.open(course, trigger, () => {
+            const before = new Set(plannerAddButtonUpdaters);
+            const node = createCardActions(course, trigger);
+            return {node,cleanup:()=>{
+                plannerAddButtonUpdaters.forEach(update=>{if (!before.has(update)) plannerAddButtonUpdaters.delete(update);});
+            }};
+        }, () => {
+            const wrapper = document.createElement('div');
+            const found = findCourseReview(course);
+            const direct = [...new Set([found?.summary,course.review,course.experience].filter(Boolean))].join('\n\n');
+            const entries = direct ? [{course:course.course,teacher:course.teacher,summary:direct}]
+                : findTeacherReviews(course).flatMap(profile=>profile.entries.map(entry=>({...entry,teacher:profile.teacher}))).slice(0,6);
+            if (!entries.length) return null;
+            if (!direct) {
+                const notice = document.createElement('p');
+                notice.className = 'course-detail-muted'; notice.textContent = t('teacher-reviews-disclaimer');
+                wrapper.appendChild(notice);
+            }
+            entries.forEach(entry=>{
+                const heading=document.createElement('h3'); heading.textContent=`${entry.course} · ${entry.teacher}`;
+                const content=document.createElement('p'); content.textContent=entry.summary;
+                wrapper.append(heading,content);
+            });
+            return wrapper;
+        }, () => createCardStats(course));
     }
 
     function createCardHeader(course) {
@@ -1367,14 +1407,6 @@
         const headerActions = document.createElement('div');
         headerActions.className = 'flex shrink-0 items-center gap-1';
 
-        const copyButton = document.createElement('button');
-        copyButton.type = 'button';
-        copyButton.className = 'inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
-        copyButton.textContent = `▣ ${t('copy')}`;
-        copyButton.title = t('copy-course-info');
-        copyButton.setAttribute('aria-label', t('copy-course-info'));
-        copyButton.addEventListener('click', () => copyCourseInfo(course));
-
         const favoriteButton = document.createElement('button');
         favoriteButton.type = 'button';
         favoriteButton.className = 'h-8 w-8 rounded-md text-lg text-notion-red hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors';
@@ -1394,8 +1426,15 @@
             );
         });
 
-        headerActions.append(copyButton, favoriteButton);
-        titleRow.append(title, headerActions);
+        headerActions.append(favoriteButton);
+        const heading = document.createElement('h3');
+        const titleButton = document.createElement('button');
+        titleButton.type='button'; titleButton.className='course-card-title';
+        while (title.firstChild) titleButton.appendChild(title.firstChild);
+        titleButton.addEventListener('click',()=>openCourseDetails(course,titleButton));
+        heading.appendChild(titleButton);
+        titleRow.classList.add('course-card-header');
+        titleRow.append(heading, headerActions);
         header.appendChild(titleRow);
 
         const metaRow = document.createElement('div');
@@ -1404,6 +1443,8 @@
         if (course.teacher) {
             const teacher = document.createElement('span');
             teacher.textContent = course.teacher;
+            teacher.className = 'course-card-teacher';
+            teacher.title = course.teacher;
             metaRow.appendChild(teacher);
         }
 
@@ -1420,10 +1461,6 @@
             metaRow.appendChild(semester);
         }
 
-        const sourceBadge = document.createElement('span');
-        sourceBadge.className = 'notion-tag bg-notion-bg-hover dark:bg-dark-border text-black dark:text-white';
-        sourceBadge.textContent = course.sourceLabel;
-
         if (course.sourceKey === 'fcu_scrape') {
             const requirementBadge = document.createElement('span');
             requirementBadge.className = course.required
@@ -1433,7 +1470,7 @@
             metaRow.appendChild(requirementBadge);
         }
 
-        metaRow.appendChild(sourceBadge);
+        metaRow.classList.add('course-card-meta');
 
         header.appendChild(metaRow);
         return header;
@@ -1445,9 +1482,10 @@
         const prefix = window.i18nDayPrefix ? window.i18nDayPrefix() : '週';
         const grouped = {};
         for (const slot of times) {
-            const m = slot.match(/^([A-Z]+)(\d+)$/);
+            const m = String(slot).match(/^([A-Z]+)(\d+)$/);
             if (!m) continue;
             const [, day, period] = m;
+            if (Number(period) === 0) continue;
             if (!grouped[day]) grouped[day] = [];
             grouped[day].push(Number(period));
         }
@@ -1465,7 +1503,7 @@
                 ranges.push(start === end ? `${start}` : `${start}-${end}`);
                 return `${prefix}${days[d] || d}(${ranges.join(',')})`;
             })
-            .join(' ');
+            .join(' ') || t('outline-time-tbd');
     }
 
     function createCardStats(course) {
@@ -1916,8 +1954,11 @@
     function createCardTags(course) {
         const tagsWrapper = document.createElement('div');
         tagsWrapper.className = 'flex flex-wrap gap-2';
-        if (course.tagMeta.length) {
-            course.tagMeta.slice(0, 3).forEach((meta) => {
+        const seen = new Set();
+        const tags = [...(course.outlinePreview?.tags || []).map(label => ({label,confidence:'high',ai:true})), ...course.tagMeta]
+            .filter(meta => { if (seen.has(meta.label)) return false; seen.add(meta.label); return true; });
+        if (tags.length) {
+            tags.slice(0, 3).forEach((meta) => {
                 const tagChip = document.createElement('span');
                 const color = TAG_COLOR_MAP[meta.label];
                 if (meta.confidence === 'low') {
@@ -1927,9 +1968,10 @@
                     tagChip.className = `notion-tag ${color ? `tag-${color}` : 'bg-notion-bg-secondary dark:bg-dark-card text-notion-text-secondary dark:text-dark-text-secondary'}`;
                 }
                 tagChip.textContent = meta.label;
+                if (meta.ai) tagChip.title = t('outline-ai-label');
                 tagsWrapper.appendChild(tagChip);
             });
-            const remaining = course.tagMeta.length - 3;
+            const remaining = tags.length - 3;
             if (remaining > 0) {
                 const moreChip = document.createElement('span');
                 moreChip.className = 'notion-tag bg-notion-bg-secondary dark:bg-dark-card text-notion-text-secondary dark:text-dark-text-secondary';
@@ -1940,7 +1982,7 @@
         return tagsWrapper;
     }
 
-    function createCardActions(course) {
+    function createCardActions(course, returnFocus) {
         const actions = document.createElement('div');
         actions.className = 'flex flex-col gap-2.5 mt-auto pt-3 border-t border-notion-border dark:border-dark-border';
 
@@ -1949,10 +1991,11 @@
 
         const aiButton = document.createElement('button');
         aiButton.type = 'button';
+        aiButton.dataset.closeCourseDetails = 'true';
         aiButton.className = 'flex-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-notion-accent text-white hover:bg-[#2899c8] transition-colors duration-100';
         aiButton.textContent = t('ai-evaluate');
         aiButton.addEventListener('click', () => {
-            openAiEvaluation(course, aiButton);
+            openAiEvaluation(course, returnFocus || aiButton);
         });
 
         // 教師欄位可能是一長串共同授課的名單（例如專題研究有 20 位）。
@@ -1976,7 +2019,11 @@
         dcardButton.textContent = dcardNameOnly ? t('dcard-course-only') : t('dcard-review');
         if (dcardNameOnly) dcardButton.title = t('dcard-name-only-hint', { n: teacherNames.length });
 
-        actionsRow.append(dcardButton, aiButton);
+        const copyButton=document.createElement('button');
+        copyButton.type='button';copyButton.className='px-3 py-1.5 rounded-md border border-notion-border dark:border-dark-border text-xs';
+        copyButton.textContent=t('copy');copyButton.setAttribute('aria-label',t('copy-course-info'));
+        copyButton.addEventListener('click',()=>copyCourseInfo(course));
+        actionsRow.append(copyButton, dcardButton, aiButton);
 
         // 加入規劃按鈕（獨立一行，有框框）
         const addToPlanRow = document.createElement('div');
@@ -1984,6 +2031,7 @@
 
         const addToPlanBtn = document.createElement('button');
         addToPlanBtn.type = 'button';
+        addToPlanBtn.dataset.closeCourseDetails = 'true';
         addToPlanBtn.className = 'w-full px-3 py-2 text-xs font-medium text-notion-text-secondary dark:text-dark-text-secondary hover:bg-notion-bg-hover dark:hover:bg-dark-border transition-colors duration-100 rounded-md';
 
         // 從搜尋課程卡片建構 planner-compatible 物件（不需背景說明）

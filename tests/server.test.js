@@ -70,3 +70,16 @@ test('NID login URL uses the official FCU OAuth host', async () => {
   assert.ok(loginUrl.searchParams.get('client_id'));
   assert.ok(loginUrl.searchParams.get('client_url'));
 });
+
+test('outline index reports actual coverage without issuing upstream calls', async () => {
+  const response=await fetch(`${baseUrl}/api/course-outlines?semester=115-1`);
+  const data=await response.json();
+  assert.equal(response.status,200);
+  assert.ok(data.coverage.total>3000);
+  assert.equal(data.coverage.fetched,Object.keys(data.previews).length);
+  assert.ok(data.coverage.summarized<=data.coverage.fetched);
+});
+test('outline endpoint rejects malformed and nonexistent course identities', async () => {
+  assert.equal((await fetch(`${baseUrl}/api/course-outline?semester=115-1&selCode=bad`)).status,400);
+  assert.equal((await fetch(`${baseUrl}/api/course-outline?semester=999-1&selCode=9999`)).status,404);
+});
