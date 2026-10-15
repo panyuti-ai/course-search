@@ -11,11 +11,12 @@
  *   --sms    學期 1=上學期 2=下學期 3=暑期甲 4=暑期乙
  *   --out    輸出路徑 (預設 public/fcu_courses.json)
  *   --delay  每次請求間隔 ms (預設 300)
- *   --only   只抓指定的那一個學期，不自動補抓其他學期
- *   --merge  併入輸出檔既有資料：只取代這次抓到的學期，其餘學期原封不動保留
+ *   --only   相容舊指令；預設已只抓指定學期
+ *   --include-history  額外抓歷史學期（必須用 --out 指定 public 以外的路徑）
+ *   --merge  保留歷史輸出檔其他學期（同樣不能寫進 public）
  *
- * 只更新單一學期又不想洗掉舊資料時：
- *   node scripts/scrapeFcu.js --year 115 --sms 1 --only --merge
+ * 更新網站當期清單：
+ *   node scripts/scrapeFcu.js --year 115 --sms 1
  */
 
 import fs from 'fs';
@@ -27,6 +28,7 @@ const proxy = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.
     ? new EnvHttpProxyAgent() : undefined;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.resolve(__dirname, '../public');
 const BASE_URL = process.env.FCU_BASE_URL || 'https://coursesearch02.fcu.edu.tw/Service/Search.asmx';
 
 // ── CLI 參數解析 ──────────────────────────────────────────────
@@ -49,7 +51,7 @@ function parseArgs() {
         sms,
         out:   get('--out')   || path.join(__dirname, '../public/fcu_courses.json'),
         delay: Number(get('--delay') || 300),
-        only:  args.includes('--only'),
+        includeHistory: args.includes('--include-history') && !args.includes('--only'),
         merge: args.includes('--merge'),
     };
 }
@@ -97,6 +99,7 @@ async function fetchAllByType2(baseOptions, delay) {
     // We page through by iterating over weekdays (MON-FRI) + "*"
     const days = ['*', '1', '2', '3', '4', '5', '6', '7'];
     const allItems = new Map();
+    const failedDays = [];
 
     for (const week of days) {
         await sleep(delay);
@@ -122,8 +125,10 @@ async function fetchAllByType2(baseOptions, delay) {
             console.log(`  day=${week}: got ${items.length} courses (total unique: ${allItems.size})`);
         } catch (e) {
             console.warn(`  day=${week} failed: ${e.message}`);
+            if (week !== '*') failedDays.push(week);
         }
     }
+    if (failedDays.length) throw new Error(`課程清單抓取不完整（星期 ${failedDays.join(', ')} 失敗），已保留既有清單。`);
     return Array.from(allItems.values());
 }
 
@@ -320,18 +325,37 @@ async function scrapeSemester(year, sms, delay) {
     });
 }
 
+// Preserve existing opaque IDs so a refresh or removal cannot reassign favorites.
+function preserveCourseIds(courses, existing = []) {
+    const existingIds = new Map(existing.map((course, index) => [
+        `${course.semester}|${course.selCode}`,
+        course.id || [course.course, course.teacher, course.semester, course.source, index].join('|'),
+    ]));
+    return courses.map(course => ({
+        ...course,
+        id: existingIds.get(`${course.semester}|${course.selCode}`) || `fcu|${course.semester}|${course.selCode}`,
+    }));
+}
+
 async function main() {
-    const { year, sms, out, delay, only, merge } = parseArgs();
+    const { year, sms, out, delay, includeHistory, merge } = parseArgs();
+    if (!/^\d{3}$/.test(year) || !/^[1-4]$/.test(sms)) throw new Error('Invalid year or semester');
+    const relativeOutput = path.relative(PUBLIC_DIR, path.resolve(out));
+    const publicOutput = relativeOutput === '' || (relativeOutput !== '..' &&
+        !relativeOutput.startsWith('..' + path.sep) && !path.isAbsolute(relativeOutput));
+    if (publicOutput && (includeHistory || merge)) {
+        throw new Error('網站 public 只允許單一當期清單；歷史抓取或合併請用 --out 指定 public 以外的路徑。');
+    }
 
     // Determine which semesters to scrape.
-    // Always include the requested semester; unless --only is given, also add the other
-    // semester of the same year plus both semesters of the previous year.
+    // The website uses only the requested term. Historical scraping is opt-in and
+    // cannot write into public, where old offerings could become selectable again.
     const targets = [];
 
     // Requested semester first
     targets.push({ year, sms });
 
-    if (!only) {
+    if (includeHistory) {
         // The other semester of the same year
         const otherSms = sms === '1' ? '2' : '1';
         targets.push({ year, sms: otherSms });
@@ -362,21 +386,15 @@ async function main() {
 
     // --merge：保留輸出檔裡「這次沒抓的學期」，只取代這次抓到的學期。
     // 抓到 0 筆時直接中止，避免把既有資料覆蓋成空檔。
+    if (!allCourses.length) throw new Error('一筆課程都沒抓到，已中止寫入並保留既有清單。');
+    let existing = [];
+    if (fs.existsSync(out)) {
+        existing = JSON.parse(fs.readFileSync(out, 'utf-8'));
+        if (!Array.isArray(existing)) throw new Error('既有課程清單不是陣列，已中止寫入。');
+    }
     let kept = [];
     if (merge) {
-        if (!allCourses.length) {
-            throw new Error('--merge 模式下這次一筆都沒抓到，為避免洗掉既有資料，已中止寫入。');
-        }
         if (fs.existsSync(out)) {
-            let existing;
-            try {
-                existing = JSON.parse(fs.readFileSync(out, 'utf-8'));
-            } catch (e) {
-                throw new Error(`--merge 無法解析既有檔案 ${out}：${e.message}`);
-            }
-            if (!Array.isArray(existing)) {
-                throw new Error(`--merge 既有檔案 ${out} 不是陣列，已中止寫入。`);
-            }
             const scrapedSemesters = new Set(uniqueTargets.map(({ year: y, sms: s }) => `${y}-${s}`));
             kept = existing.filter((c) => !scrapedSemesters.has(c?.semester));
             console.log(`\n  merge：保留既有 ${kept.length} 筆（未被這次抓取涵蓋的學期）`);
@@ -396,7 +414,10 @@ async function main() {
 
     const outDir = path.dirname(out);
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(out, JSON.stringify(deduped, null, 2), 'utf-8');
+    const identified = preserveCourseIds(deduped, existing);
+    const temporaryOutput = `${out}.tmp`;
+    fs.writeFileSync(temporaryOutput, JSON.stringify(identified, null, 2), 'utf-8');
+    fs.renameSync(temporaryOutput, out);
 
     const depts = new Set(deduped.map((c) => c.dept).filter(Boolean));
     console.log(`\n✓ 已寫入 ${out}`);
@@ -424,4 +445,4 @@ if (invokedDirectly) {
     });
 }
 
-export { normalizeCourse, parsePeriodString, parseRoomsFromPeriod, parseTeachersFromPeriod };
+export { normalizeCourse, parsePeriodString, parseRoomsFromPeriod, parseTeachersFromPeriod, preserveCourseIds };

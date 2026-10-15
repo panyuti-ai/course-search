@@ -1442,7 +1442,10 @@
     "planner-preserve-exported": "匯出頁已開啟，請在該頁完成列印或另存為 PDF。",
     "planner-save-failed": "儲存未成功，課表仍有未保存的變更，請再試一次。",
     "planner-export-blocked": "匯出視窗未開啟。請允許彈出視窗後重試，或先儲存課表。",
-    "planner-export-btn": "匯出課表"
+    "planner-export-btn": "匯出課表",
+    "planner-course-term": "學期 {semester}",
+    "planner-term-mismatch": "這筆是 {semester} 學期資料，目前規劃學期為 {current}；請改選當學期班別。",
+    "planner-offering-unavailable": "無法在 {current} 校方開課清單確認此課；保留原課表紀錄，請改選當期班別。"
   },
   "en": {
     "planner-slot-guidance": "Ranked by your preferences. Conflicting courses are included so you can compare before changing your plan.",
@@ -1463,7 +1466,10 @@
     "planner-preserve-exported": "The export page is open. Complete printing or saving as PDF there.",
     "planner-save-failed": "Saving failed. Your changes are still unsaved; please try again.",
     "planner-export-blocked": "The export window was blocked. Allow popups and retry, or save your timetable.",
-    "planner-export-btn": "Export timetable"
+    "planner-export-btn": "Export timetable",
+    "planner-course-term": "Semester {semester}",
+    "planner-term-mismatch": "This record is for {semester}; the current planning semester is {current}. Choose a class from the current semester.",
+    "planner-offering-unavailable": "This course could not be verified in the official {current} offerings. Your saved record is kept; choose a current class."
   },
   "ja": {
     "planner-slot-guidance": "希望条件の順に表示します。時間が重複する科目も比較できます。",
@@ -1484,7 +1490,10 @@
     "planner-preserve-exported": "出力ページを開きました。そのページで印刷または PDF 保存を完了してください。",
     "planner-save-failed": "保存に失敗しました。変更は未保存です。再試行してください。",
     "planner-export-blocked": "出力画面を開けません。ポップアップを許可して再試行するか、時間割を保存してください。",
-    "planner-export-btn": "時間割を出力"
+    "planner-export-btn": "時間割を出力",
+    "planner-course-term": "学期 {semester}",
+    "planner-term-mismatch": "これは {semester} 学期の情報です。現在の計画学期は {current} です。当学期のクラスを選択してください。",
+    "planner-offering-unavailable": "この授業は {current} の公式開講一覧で確認できません。保存済みの記録は保持されます。当学期のクラスを選んでください。"
   },
   "vi": {
     "planner-slot-guidance": "Xếp theo sở thích xếp lịch. Môn trùng lịch cũng được hiển thị để bạn so sánh trước khi đổi.",
@@ -1505,7 +1514,10 @@
     "planner-preserve-exported": "Trang xuất đã mở. Hãy hoàn tất in hoặc lưu PDF tại trang đó.",
     "planner-save-failed": "Lưu thất bại. Thay đổi vẫn chưa được lưu; vui lòng thử lại.",
     "planner-export-blocked": "Cửa sổ xuất bị chặn. Cho phép cửa sổ bật lên rồi thử lại, hoặc lưu thời khóa biểu.",
-    "planner-export-btn": "Xuất thời khóa biểu"
+    "planner-export-btn": "Xuất thời khóa biểu",
+    "planner-course-term": "Học kỳ {semester}",
+    "planner-term-mismatch": "Dữ liệu này thuộc học kỳ {semester}; học kỳ đang xếp lịch là {current}. Hãy chọn lớp của học kỳ hiện tại.",
+    "planner-offering-unavailable": "Không tìm thấy môn này trong danh sách mở lớp chính thức học kỳ {current}. Giữ nguyên dữ liệu đã lưu; hãy chọn lớp hiện tại."
   },
   "id": {
     "planner-slot-guidance": "Diurutkan menurut preferensi jadwal. Mata kuliah yang bentrok juga ditampilkan untuk dibandingkan.",
@@ -1526,7 +1538,10 @@
     "planner-preserve-exported": "Halaman ekspor dibuka. Selesaikan pencetakan atau penyimpanan PDF di sana.",
     "planner-save-failed": "Penyimpanan gagal. Perubahan belum tersimpan; silakan coba lagi.",
     "planner-export-blocked": "Jendela ekspor diblokir. Izinkan popup dan coba lagi, atau simpan jadwal.",
-    "planner-export-btn": "Ekspor jadwal"
+    "planner-export-btn": "Ekspor jadwal",
+    "planner-course-term": "Semester {semester}",
+    "planner-term-mismatch": "Data ini berasal dari semester {semester}; semester perencanaan saat ini adalah {current}. Pilih kelas semester saat ini.",
+    "planner-offering-unavailable": "Mata kuliah ini tidak ditemukan dalam daftar resmi semester {current}. Catatan tersimpan tetap ada; pilih kelas semester saat ini."
   }
 };
   for (const [lang, entries] of Object.entries(PLANNER_WORKFLOW_TRANSLATIONS)) {

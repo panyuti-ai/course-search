@@ -5,21 +5,22 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
-const PUBLIC_DIR = path.join(ROOT_DIR, "public");
+// Historical review inputs are not a selectable course catalog.
+const LEGACY_DIR = path.join(ROOT_DIR, "data/legacy");
 
 const SOURCES = [
   {
-    file: path.join(PUBLIC_DIR, "converted_coursesd.json"),
+    file: path.join(LEGACY_DIR, "converted_coursesd.json"),
     source: "converted_coursesd",
     normalizer: normalizeConverted,
   },
   {
-    file: path.join(PUBLIC_DIR, "data.json"),
+    file: path.join(LEGACY_DIR, "data.json"),
     source: "data_json",
     normalizer: normalizeDataJson,
   },
   {
-    file: path.join(PUBLIC_DIR, "opt_all_courses_with_experience.json"),
+    file: path.join(LEGACY_DIR, "opt_all_courses_with_experience.json"),
     source: "opt_all_courses_with_experience",
     normalizer: normalizeOptAllCoursesWithExperience,
   },
@@ -42,7 +43,7 @@ async function main() {
     });
   }
 
-  const outputFile = path.join(PUBLIC_DIR, "courses.json");
+  const outputFile = path.join(LEGACY_DIR, "courses.json");
   await fs.writeFile(
     outputFile,
     JSON.stringify(merged, null, 2),

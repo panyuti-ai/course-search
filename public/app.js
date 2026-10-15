@@ -132,6 +132,9 @@
     const state = {
         courses: [],
         coursesById: new Map(),
+        currentSemester: '',
+        offeringsByCode: new Map(),
+        offeringsByName: new Map(),
         favorites: new Map(),
         activeTagFilters: new Set(),
         activeSourceFilters: new Set(),
@@ -301,22 +304,27 @@
             return null;
         }
 
-        // Load all data sources in parallel; only courses.json is required
-        const [rawCourses, rawFcu, rawReviews, outlineIndex] = await Promise.all([
-            fetchJson('courses.json'),
-            fetchJson('fcu_courses.json').catch(() => null),
+        // Only official offerings may create course cards. Reviews only enrich them.
+        const [rawFcu, rawReviews] = await Promise.all([
+            fetchJson('fcu_courses.json'),
             fetchJson('course_reviews.json').catch(() => null),
-            fetch(`${window.API_BASE_URL || ''}/api/course-outlines?semester=115-1`, {signal:AbortSignal.timeout(5000)})
-                .then(response => response.ok ? response.json() : null).catch(() => null),
         ]);
+        buildReviewIndex(rawReviews);
+        if (!Array.isArray(rawFcu) || !rawFcu.length) throw lastError || new Error('Official course catalog unavailable');
+        const semesters = rawFcu.filter(item => item.source === 'fcu_scrape' && parseSemesterKey(item.semester) !== null)
+            .map(item => item.semester);
+        state.currentSemester = semesters.sort((a, b) => parseSemesterKey(b) - parseSemesterKey(a))[0] || '';
+        if (!state.currentSemester) throw new Error('Official course semester unavailable');
+        const outlineParams = new URLSearchParams({ semester: state.currentSemester });
+        const outlineIndex = await fetch(`${window.API_BASE_URL || ''}/api/course-outlines?${outlineParams}`, {signal:AbortSignal.timeout(5000)})
+            .then(response => response.ok ? response.json() : null).catch(() => null);
         state.outlinePreviews = outlineIndex?.previews || {};
 
-        buildReviewIndex(rawReviews);
-
-        if (!rawCourses) throw lastError;
-
-        // Convert FCU scraped courses to the same shape as courses.json entries
-        const fcuCourses = Array.isArray(rawFcu) ? rawFcu.map((item) => ({
+        // Normalize verified offerings into the frontend course-card shape.
+        const fcuCourses = rawFcu.filter(item => item.source === 'fcu_scrape' &&
+            item.semester === state.currentSemester && /^\d{4}$/.test(item.selCode) && item.course?.trim())
+            .map((item) => ({
+            id:         item.id,
             course:     item.course || '',
             teacher:    item.teacher || '',
             credits:    item.credits,
@@ -338,19 +346,18 @@
             capacity:   item.capacity,
             selCode:    item.selCode || '',
             courseCode: item.courseCode || '',
-        })) : [];
-
-        const EXCLUDED_SOURCES = new Set(['converted_coursesd', 'data_json', 'opt_all_courses_with_experience']);
-        const filteredCourses = Array.isArray(rawCourses)
-            ? rawCourses.filter((item) => {
-                const src = (item.source ?? '').toString().trim().toLowerCase();
-                return !EXCLUDED_SOURCES.has(src);
-            })
-            : [];
-        const allRaw = [...filteredCourses, ...fcuCourses];
-        state.courses = allRaw.map((item, index) => {
+        }));
+        if (!fcuCourses.length) throw new Error('No valid official offerings');
+        state.offeringsByCode.clear();
+        state.offeringsByName.clear();
+        state.courses = fcuCourses.map((item, index) => {
             const normalized = normalizeCourse(item, index);
             state.coursesById.set(normalized.id, normalized);
+            state.offeringsByCode.set(normalized.selCode, normalized);
+            const nameKey = normalizeCourseNameForMatch(normalized.course);
+            const named = state.offeringsByName.get(nameKey) || [];
+            named.push(normalized);
+            state.offeringsByName.set(nameKey, named);
             return normalized;
         });
     }
@@ -584,6 +591,9 @@
     }
 
     function createCourseId(course, index) {
+        if (course.source === 'fcu_scrape' && course.semester && course.selCode) {
+            return course.id || `fcu|${course.semester}|${course.selCode}`;
+        }
         return [
             course.course ?? '',
             course.teacher ?? '',
@@ -1102,12 +1112,9 @@
             return;
         }
 
-        const currentSemester = getCurrentSemester();
         let results = state.courses.filter((course) => {
             // 只呈現當學期有開的課：舊學期的課學生已經選不到了
-            if (currentSemester && course.semester && course.semester !== currentSemester) {
-                return false;
-            }
+            if (!isCourseInCurrentSemester(course)) return false;
 
             if (query) {
                 const tokens = query.split(/\s+/).filter(Boolean);
@@ -1219,19 +1226,47 @@
         return Number(match[1]) * 10 + Number(match[2]);
     }
 
-    // 資料中最新的一個學期，例如 "115-1"。學生只能選當學期有開的課，
-    // 因此搜尋結果只呈現這個學期；舊學期資料保留在檔案中，僅供回查使用。
-    let cachedCurrentSemester;
+    // The active term comes only from the official offering catalog, never reviews.
     function getCurrentSemester() {
-        if (cachedCurrentSemester !== undefined) return cachedCurrentSemester;
-        let best = null;
-        let bestKey = -Infinity;
-        state.courses.forEach((c) => {
-            const key = parseSemesterKey(c.semester);
-            if (key != null && key > bestKey) { bestKey = key; best = c.semester; }
-        });
-        cachedCurrentSemester = best;
-        return best;
+        return state.currentSemester;
+    }
+
+    function isCourseInCurrentSemester(course) {
+        const currentSemester = getCurrentSemester();
+        return Boolean(currentSemester) && course.semester === currentSemester;
+    }
+
+    function findCurrentOffering(course) {
+        if (course.semester && !isCourseInCurrentSemester(course)) return null;
+        const nameKey = normalizeCourseNameForMatch(course.course);
+        const teacherKey = normalizeCourseNameForMatch(course.teacher);
+        const matches = candidate => normalizeCourseNameForMatch(candidate.course) === nameKey &&
+            (!teacherKey || normalizeCourseNameForMatch(candidate.teacher) === teacherKey);
+        if (course.selCode) {
+            const candidate = state.offeringsByCode.get(course.selCode);
+            return candidate && matches(candidate) ? candidate : null;
+        }
+        // Older saved plans and uploaded PDFs may lack school identities. Only
+        // recognize them when the name, teacher and actual meeting times agree.
+        const slots = normalizePlannerTimes(course.timeSlots || course.times || []);
+        if (!slots.length) return null;
+        return (state.offeringsByName.get(nameKey) || []).find(candidate => {
+            const officialSlots = new Set(candidate.times);
+            return matches(candidate) && officialSlots.size === slots.length && slots.every(slot => officialSlots.has(slot));
+        }) || null;
+    }
+
+    function getPlannerSemesterNotice(course) {
+        if (findCurrentOffering(course)) return '';
+        return course.semester && !isCourseInCurrentSemester(course)
+            ? t('planner-term-mismatch', { semester: course.semester, current: getCurrentSemester() })
+            : t('planner-offering-unavailable', { current: getCurrentSemester() });
+    }
+
+    function getPlannerUnselectedCandidates() {
+        return state.planner.pool
+            .filter((course) => !state.planner.selected.has(course.id) && findCurrentOffering(course))
+            .sort((a, b) => comparePlannerCourses(b, a));
     }
 
     // 新學期排前面；沒有學期資訊的一律排最後。
@@ -2079,7 +2114,8 @@
 
         function getMatchInPool() {
             return state.planner.pool.find((p) =>
-                p.course === course.course && p.teacher === course.teacher
+                p.course === course.course && p.teacher === course.teacher && findCurrentOffering(p) &&
+                (!p.selCode || p.selCode === course.selCode)
             );
         }
 
@@ -2090,6 +2126,14 @@
         function updateAddToPlanBtn() {
             addToPlanBtn.style.opacity = '';
             addToPlanBtn.disabled = false;
+
+            const semesterNotice = getPlannerSemesterNotice(course);
+            if (semesterNotice) {
+                addToPlanBtn.textContent = t('not-offered');
+                addToPlanBtn.title = semesterNotice;
+                addToPlanBtn.disabled = true;
+                return;
+            }
 
             if (!hasPdfUploaded()) {
                 addToPlanBtn.textContent = t('add-to-plan-no-pdf');
@@ -2143,6 +2187,8 @@
         updateAddToPlanBtn();
 
         addToPlanBtn.addEventListener('click', () => {
+            const semesterNotice = getPlannerSemesterNotice(course);
+            if (semesterNotice) { showToast(semesterNotice, 'error'); return; }
             if (!hasPdfUploaded()) {
                 showToast(t('please-upload-pdf'), 'error');
                 setActiveView('planner', { scroll: true });
@@ -2539,7 +2585,7 @@
             const loadedCourses = fixedSourceCourses
                 .map((course, index) => normalizePlannerInputCourse({
                     ...course,
-                    source: course?.source || 'uploaded_saved'
+                    source: course?.source || course?.sourceKey || 'uploaded_saved'
                 }, index))
                 .filter(Boolean)
                 .map((course) => hydrateSavedPlannerCourseFromCatalog(course))
@@ -2559,7 +2605,7 @@
             selectedCourses
                 .map((course, index) => normalizePlannerInputCourse({
                     ...course,
-                    source: course?.source || 'uploaded_saved'
+                    source: course?.source || course?.sourceKey || 'uploaded_saved'
                 }, index))
                 .filter(Boolean)
                 .map((course) => hydrateSavedPlannerCourseFromCatalog(course))
@@ -3794,7 +3840,7 @@
         const sourceScore = toPlannerNumber(item.score ?? item.total_rating);
         const sourceDifficulty = toPlannerNumber(item.difficulty);
         const credits = toPlannerNumber(item.credits ?? item.credit ?? item['學分']) ?? inferPlannerCredits(tags);
-        const sourceKey = toPlannerString(item.source) || 'uploaded';
+        const sourceKey = toPlannerString(item.source || item.sourceKey) || 'uploaded';
         // 系辦預排的必修不該被動到，但學生自己加選、一併印進 PDF 的課應該可以退。
         // 課表 PDF 上分不出兩者，因此由使用者自行解除固定。
         const isUploaded = sourceKey === 'uploaded' || sourceKey.startsWith('uploaded_');
@@ -3804,6 +3850,10 @@
             id: createPlannerId(item, index),
             course: courseName,
             teacher: toPlannerString(item.teacher ?? item.professor ?? item.instructor),
+            semester: toPlannerString(item.semester),
+            selCode: toPlannerString(item.selCode),
+            courseCode: toPlannerString(item.courseCode),
+            dept: toPlannerString(item.dept),
             credits,
             timeSlots,
             required,
@@ -3820,7 +3870,7 @@
     }
 
     function buildPlannerCatalogCandidates() {
-        return state.courses.map((course, index) => {
+        return state.courses.map((course) => {
             // Use actual credits from fcu_scrape if available, otherwise infer from tags
             const credits = course.credits != null
                 ? course.credits
@@ -3833,7 +3883,7 @@
             const matchCorpus = course.matchCorpus ||
                 `${course.course} ${course.teacher} ${course.tags.join(' ')} ${course.semester} ${course.dept}`.toLowerCase();
             return {
-                id: `catalog|${course.id}|${index}`,
+                id: `catalog|${course.id}`,
                 course: course.course,
                 teacher: course.teacher,
                 credits,
@@ -3847,10 +3897,12 @@
                 sourceLabel: course.sourceLabel || formatSource(course.sourceKey),
                 matchCorpus,
                 semester: course.semester || '',
+                selCode: course.selCode || '',
+                courseCode: course.courseCode || '',
                 dept: course.dept || '',
                 relevance: 0
             };
-        });
+        }).filter(isCourseInCurrentSemester);
     }
 
     function buildPlannerPool(uploadedCourses, aiKeywords = []) {
@@ -3986,7 +4038,9 @@
 
         // All courses sorted by relevance; required/pinned courses get priority
         // 先依關聯分數排序
-        const poolCopy = state.planner.pool.slice().sort((a, b) => comparePlannerCourses(b, a));
+        const poolCopy = state.planner.pool
+            .filter((course) => course.pinned || findCurrentOffering(course))
+            .sort((a, b) => comparePlannerCourses(b, a));
 
         // 找出非 pinned 課程的最高基礎關聯分數（去除 required +10000 bonus）
         const topScore = poolCopy.reduce((max, c) => {
@@ -4118,6 +4172,8 @@
     function plannerAddCourse(courseId) {
         const course = state.planner.pool.find((item) => item.id === courseId);
         if (!course) return;
+        const semesterNotice = getPlannerSemesterNotice(course);
+        if (semesterNotice) { showToast(semesterNotice, 'error'); return; }
         if (state.planner.selected.has(course.id)) return;
         if (hasPlannerConflictWithSelected(course, state.planner.selected)) {
             showToast(t('conflict-planner'), 'error');
@@ -4441,10 +4497,7 @@
             selectedContainer.appendChild(fragment);
         }
 
-        const selectedIds = new Set(state.planner.selected.keys());
-        const allCandidates = state.planner.pool
-            .filter((course) => !selectedIds.has(course.id))
-            .sort((a, b) => comparePlannerCourses(b, a));
+        const allCandidates = getPlannerUnselectedCandidates();
 
         if (!allCandidates.length) {
             candidateContainer.appendChild(createPlannerEmptyState(t('planner-no-candidate')));
@@ -5050,11 +5103,7 @@
     }
 
     function getPlannerSlotPickerCandidates(slotKey) {
-        const selectedIds = new Set(state.planner.selected.keys());
-        const allCandidates = state.planner.pool
-            .filter((course) => !selectedIds.has(course.id))
-            .filter((course) => !course.pinned)
-            .sort((a, b) => comparePlannerCourses(b, a));
+        const allCandidates = getPlannerUnselectedCandidates().filter((course) => !course.pinned);
 
         const teacherMap = new Map();
         allCandidates.forEach((course) => {
@@ -5571,10 +5620,7 @@
     }
 
     function buildPlannerChatContext() {
-        const selectedIds = new Set(state.planner.selected.keys());
-        const candidates = state.planner.pool
-            .filter((course) => !selectedIds.has(course.id))
-            .sort((a, b) => comparePlannerCourses(b, a))
+        const candidates = getPlannerUnselectedCandidates()
             .slice(0, PLANNER_CHAT_MAX_CANDIDATES)
             .map(toPlannerChatCourse);
 
@@ -5592,6 +5638,8 @@
     function toPlannerChatCourse(course) {
         return {
             id: course.id,
+            semester: course.semester || '',
+            selCode: course.selCode || '',
             course: course.course,
             teacher: course.teacher || '',
             credits: Number.isFinite(course.credits) ? course.credits : null,
@@ -5600,7 +5648,11 @@
             pinned: Boolean(course.pinned),
             difficulty: Number.isFinite(course.difficulty) ? course.difficulty : null,
             score: Number.isFinite(course.score) ? course.score : null,
-            reason: buildPlannerReasonText(course)
+            reason: [
+                getPlannerSemesterNotice(course),
+                course.semester ? t('planner-course-term', { semester: course.semester }) : '',
+                buildPlannerReasonText(course),
+            ].filter(Boolean).join('；')
         };
     }
 
@@ -5778,7 +5830,16 @@
         const relevanceLabel = displayRelevance.toFixed(1);
         const relevanceTier = getPlannerRelevanceTier(displayRelevance);
         info.textContent = `${pinnedLabel}｜${course.credits} 學分｜關聯分數 ${relevanceLabel}${relevanceTier}｜${timeLabel}`;
+        if (course.semester) info.textContent += `｜${t('planner-course-term', { semester: course.semester })}`;
         card.appendChild(info);
+
+        const semesterNotice = getPlannerSemesterNotice(course);
+        if (semesterNotice) {
+            const notice = document.createElement('p');
+            notice.className = 'planner-historical-note';
+            notice.textContent = semesterNotice;
+            card.appendChild(notice);
+        }
 
         const reasonText = buildPlannerReasonText(course);
         if (reasonText) {
@@ -5811,6 +5872,8 @@
         const matches = state.courses
             .filter((candidate) => {
                 if (candidate.sourceKey !== 'fcu_scrape') return false;
+                if (course.semester && candidate.semester !== course.semester) return false;
+                if (course.selCode && candidate.selCode !== course.selCode) return false;
                 if (normalizeCourseNameForMatch(candidate.course) !== courseName) return false;
                 if (!teacher) return true;
                 return toPlannerString(candidate.teacher)
@@ -6008,6 +6071,7 @@
         // Filter to non-conflicting, non-selected variants
         const available = allTeacherVariants.filter((v) => {
             if (state.planner.selected.has(v.id)) return false;
+            if (!findCurrentOffering(v)) return false;
             if (hasPlannerConflictWithSelected(v, state.planner.selected)) return false;
             return true;
         });
