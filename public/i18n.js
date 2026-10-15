@@ -1422,6 +1422,117 @@
     if (TRANSLATIONS[lang]) Object.assign(TRANSLATIONS[lang], entries);
   }
 
+  const PLANNER_WORKFLOW_TRANSLATIONS = {
+  "zh-Hant": {
+    "planner-slot-guidance": "依排課偏好排序；衝堂課程也會列出，方便先比較再換課。",
+    "planner-slot-recommended": "此時段推薦課程",
+    "planner-other-recommended": "其他推薦課程",
+    "planner-no-candidates": "目前沒有符合推薦條件的課程。",
+    "planner-resolve-conflict": "衝堂中",
+    "planner-conflict-count": "⚠ 與 {n} 門課衝堂",
+    "planner-conflict-fixed": "固定課程",
+    "planner-conflict-detail": "{time} 與「{name}」衝堂",
+    "planner-conflict-hint": "先移除或調整衝突課程，再回來加入；固定課程需先解除固定。",
+    "planner-no-conflict": "✓ 可加入",
+    "planner-time-unverified": "節次未提供，請先核對",
+    "planner-preserve-title": "離開前，記得保存你的課表",
+    "planner-preserve-empty": "加入課程後，可在這裡儲存或匯出。",
+    "planner-preserve-pending": "課表有尚未保存的變更。離開前，已經儲存或匯出了嗎？",
+    "planner-preserve-saved": "目前課表已儲存，下次登入可繼續使用。",
+    "planner-preserve-exported": "匯出頁已開啟，請在該頁完成列印或另存為 PDF。",
+    "planner-save-failed": "儲存未成功，課表仍有未保存的變更，請再試一次。",
+    "planner-export-blocked": "匯出視窗未開啟。請允許彈出視窗後重試，或先儲存課表。",
+    "planner-export-btn": "匯出課表"
+  },
+  "en": {
+    "planner-slot-guidance": "Ranked by your preferences. Conflicting courses are included so you can compare before changing your plan.",
+    "planner-slot-recommended": "Recommended for this slot",
+    "planner-other-recommended": "Other recommendations",
+    "planner-no-candidates": "No courses match the recommendation criteria.",
+    "planner-resolve-conflict": "Conflicts",
+    "planner-conflict-count": "⚠ Conflicts with {n} course(s)",
+    "planner-conflict-fixed": "Fixed course",
+    "planner-conflict-detail": "{time}: conflicts with “{name}”",
+    "planner-conflict-hint": "Remove or reschedule the conflicting courses before adding. Unpin fixed courses first.",
+    "planner-no-conflict": "✓ Available",
+    "planner-time-unverified": "Time unavailable; check first",
+    "planner-preserve-title": "Keep your timetable before you leave",
+    "planner-preserve-empty": "Add courses, then save or export them here.",
+    "planner-preserve-pending": "Your timetable has unsaved changes. Have you saved or exported it?",
+    "planner-preserve-saved": "This timetable is saved and can be restored next time you sign in.",
+    "planner-preserve-exported": "The export page is open. Complete printing or saving as PDF there.",
+    "planner-save-failed": "Saving failed. Your changes are still unsaved; please try again.",
+    "planner-export-blocked": "The export window was blocked. Allow popups and retry, or save your timetable.",
+    "planner-export-btn": "Export timetable"
+  },
+  "ja": {
+    "planner-slot-guidance": "希望条件の順に表示します。時間が重複する科目も比較できます。",
+    "planner-slot-recommended": "この時間のおすすめ",
+    "planner-other-recommended": "その他のおすすめ",
+    "planner-no-candidates": "条件に合う科目がありません。",
+    "planner-resolve-conflict": "時間重複",
+    "planner-conflict-count": "⚠ {n} 科目と時間重複",
+    "planner-conflict-fixed": "固定科目",
+    "planner-conflict-detail": "{time}：「{name}」と重複",
+    "planner-conflict-hint": "重複する科目を削除・調整してから追加してください。固定科目は先に固定を解除してください。",
+    "planner-no-conflict": "✓ 追加可能",
+    "planner-time-unverified": "時間未定のため要確認",
+    "planner-preserve-title": "離れる前に時間割を保存しましょう",
+    "planner-preserve-empty": "科目を追加したら、ここで保存・出力できます。",
+    "planner-preserve-pending": "未保存の変更があります。時間割を保存・出力しましたか？",
+    "planner-preserve-saved": "保存済みです。次回ログイン時に復元できます。",
+    "planner-preserve-exported": "出力ページを開きました。そのページで印刷または PDF 保存を完了してください。",
+    "planner-save-failed": "保存に失敗しました。変更は未保存です。再試行してください。",
+    "planner-export-blocked": "出力画面を開けません。ポップアップを許可して再試行するか、時間割を保存してください。",
+    "planner-export-btn": "時間割を出力"
+  },
+  "vi": {
+    "planner-slot-guidance": "Xếp theo sở thích xếp lịch. Môn trùng lịch cũng được hiển thị để bạn so sánh trước khi đổi.",
+    "planner-slot-recommended": "Gợi ý cho tiết này",
+    "planner-other-recommended": "Gợi ý khác",
+    "planner-no-candidates": "Không có môn phù hợp với tiêu chí gợi ý.",
+    "planner-resolve-conflict": "Trùng lịch",
+    "planner-conflict-count": "⚠ Trùng với {n} môn",
+    "planner-conflict-fixed": "Môn cố định",
+    "planner-conflict-detail": "{time}: trùng với “{name}”",
+    "planner-conflict-hint": "Xóa hoặc đổi lịch môn bị trùng trước khi thêm. Cần bỏ ghim môn cố định trước.",
+    "planner-no-conflict": "✓ Có thể thêm",
+    "planner-time-unverified": "Chưa có giờ học; cần kiểm tra",
+    "planner-preserve-title": "Lưu thời khóa biểu trước khi rời trang",
+    "planner-preserve-empty": "Thêm môn rồi lưu hoặc xuất tại đây.",
+    "planner-preserve-pending": "Thời khóa biểu có thay đổi chưa lưu. Bạn đã lưu hoặc xuất chưa?",
+    "planner-preserve-saved": "Thời khóa biểu đã được lưu và có thể khôi phục khi đăng nhập lần sau.",
+    "planner-preserve-exported": "Trang xuất đã mở. Hãy hoàn tất in hoặc lưu PDF tại trang đó.",
+    "planner-save-failed": "Lưu thất bại. Thay đổi vẫn chưa được lưu; vui lòng thử lại.",
+    "planner-export-blocked": "Cửa sổ xuất bị chặn. Cho phép cửa sổ bật lên rồi thử lại, hoặc lưu thời khóa biểu.",
+    "planner-export-btn": "Xuất thời khóa biểu"
+  },
+  "id": {
+    "planner-slot-guidance": "Diurutkan menurut preferensi jadwal. Mata kuliah yang bentrok juga ditampilkan untuk dibandingkan.",
+    "planner-slot-recommended": "Rekomendasi untuk jam ini",
+    "planner-other-recommended": "Rekomendasi lain",
+    "planner-no-candidates": "Tidak ada mata kuliah yang cocok dengan kriteria rekomendasi.",
+    "planner-resolve-conflict": "Bentrok",
+    "planner-conflict-count": "⚠ Bentrok dengan {n} mata kuliah",
+    "planner-conflict-fixed": "Mata kuliah tetap",
+    "planner-conflict-detail": "{time}: bentrok dengan “{name}”",
+    "planner-conflict-hint": "Hapus atau ubah jadwal mata kuliah yang bentrok sebelum menambah. Lepaskan pin mata kuliah tetap terlebih dahulu.",
+    "planner-no-conflict": "✓ Dapat ditambah",
+    "planner-time-unverified": "Waktu belum tersedia; periksa dahulu",
+    "planner-preserve-title": "Simpan jadwal sebelum meninggalkan halaman",
+    "planner-preserve-empty": "Tambahkan mata kuliah, lalu simpan atau ekspor di sini.",
+    "planner-preserve-pending": "Jadwal memiliki perubahan yang belum disimpan. Sudah menyimpan atau mengekspornya?",
+    "planner-preserve-saved": "Jadwal tersimpan dan dapat dipulihkan saat masuk kembali.",
+    "planner-preserve-exported": "Halaman ekspor dibuka. Selesaikan pencetakan atau penyimpanan PDF di sana.",
+    "planner-save-failed": "Penyimpanan gagal. Perubahan belum tersimpan; silakan coba lagi.",
+    "planner-export-blocked": "Jendela ekspor diblokir. Izinkan popup dan coba lagi, atau simpan jadwal.",
+    "planner-export-btn": "Ekspor jadwal"
+  }
+};
+  for (const [lang, entries] of Object.entries(PLANNER_WORKFLOW_TRANSLATIONS)) {
+    if (TRANSLATIONS[lang]) Object.assign(TRANSLATIONS[lang], entries);
+  }
+
   const STORAGE_KEY_LANG = 'course-search:lang';
 
   function getCurrentLang() {

@@ -235,6 +235,7 @@
     let plannerUpdatedListenerBound = false;
     let plannerCourseRevealTimer = null;
     let plannerCourseRevealSequence = 0;
+    const plannerPersistence = { saved: null, exported: null, leavePromptShown: false, listening: false };
 
     function ensurePlannerUpdatedListener() {
         if (plannerUpdatedListenerBound) return;
@@ -797,16 +798,24 @@
         const plannerSaveBtn = document.getElementById('planner-save-db');
         if (plannerSaveBtn) {
             plannerSaveBtn.addEventListener('click', async () => {
-                const selectedCourses = Array.from(state.planner.selected?.values() || []);
-                if (!selectedCourses.length) { showToast(t('no-courses-alert'), 'error'); return; }
+                if (!state.planner.hasPlan) { showToast(t('no-courses-alert'), 'error'); return; }
                 const courses = serializePlannerStateForSave();
+                const snapshot = getPlannerPersistenceSnapshot();
                 const name = prompt(t('enter-plan-name'), `${t('default-plan-name')} ${new Date().toLocaleDateString()}`);
                 if (!name) return;
-                plannerSaveBtn.textContent = t('saving');
+                const label = plannerSaveBtn.querySelector('.planner-action-label');
+                label.textContent = t('saving');
                 plannerSaveBtn.disabled = true;
-                await window.savePlannerToDB?.(name, courses);
-                plannerSaveBtn.textContent = t('saved');
-                setTimeout(() => { plannerSaveBtn.textContent = t('save-btn'); plannerSaveBtn.disabled = false; }, 2000);
+                try {
+                    const saved = await window.savePlannerToDB?.(name, courses);
+                    if (!saved?.id) throw new Error('Planner was not saved');
+                    markPlannerPreserved('saved', snapshot);
+                } catch {
+                    showToast(t('planner-save-failed'), 'error');
+                } finally {
+                    label.textContent = t('save-btn');
+                    plannerSaveBtn.disabled = false;
+                }
             });
         }
         const plannerExportBtn = document.getElementById('planner-export-pdf');
@@ -821,6 +830,7 @@
                 const nextValue = Number(elements.plannerTargetCredits.value);
                 if (Number.isFinite(nextValue) && nextValue >= 0) {
                     state.planner.targetCredits = nextValue;
+                    updatePlannerPersistenceReminder();
                 }
             });
         }
@@ -839,6 +849,8 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
+
+        window.addEventListener('resize', updateFloatingTimetableVisibility);
 
         const smaller = document.getElementById('floating-timetable-smaller');
         const bigger = document.getElementById('floating-timetable-bigger');
@@ -2572,6 +2584,7 @@
             state.planner.hasPlan = true;
             renderPlanner();
             setActiveView('planner');
+            markPlannerPreserved('saved', getPlannerPersistenceSnapshot());
             // 捲動到排課區塊
             elements.plannerSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
@@ -4140,6 +4153,10 @@
 
         requestAnimationFrame(() => {
             if (sequence !== plannerCourseRevealSequence) return;
+            if (isPlannerTimetableInViewport()) {
+                updateFloatingTimetableVisibility();
+                return;
+            }
             const course = state.planner.selected.get(courseId);
             const floating = elements.floatingTimetable;
             const floatingTable = elements.floatingTimetableTable;
@@ -4361,6 +4378,7 @@
     function renderPlanner() {
         if (!elements.plannerSummary || !elements.plannerSelectedList || !elements.plannerCandidateList) return;
         syncPlannerProgressiveDisclosure();
+        updatePlannerPersistenceReminder();
         document.dispatchEvent(new CustomEvent('planner-updated'));
         updatePlannerChatVisibility();
 
@@ -4920,6 +4938,10 @@
         const win = window.open(url, '_blank');
         if (win) {
             win.addEventListener('load', () => URL.revokeObjectURL(url));
+            markPlannerPreserved('exported', getPlannerPersistenceSnapshot());
+        } else {
+            URL.revokeObjectURL(url);
+            showToast(t('planner-export-blocked'), 'error');
         }
     }
 
@@ -4998,7 +5020,7 @@
         title.textContent = t('period-label', { day: dayLabel, period });
         const subtitle = document.createElement('p');
         subtitle.className = 'mt-1 text-xs text-notion-text-secondary dark:text-dark-text-secondary';
-        subtitle.textContent = t('slot-candidates');
+        subtitle.textContent = t('planner-slot-guidance');
         titleWrap.append(title, subtitle);
 
         const closeBtn = document.createElement('button');
@@ -5013,11 +5035,11 @@
         const content = document.createElement('div');
         content.className = 'max-h-[calc(82vh-4.5rem)] overflow-y-auto px-4 py-3';
 
-        appendPlannerSlotPickerSection(content, '此節可加入課程', slotCandidates, teacherMap, overlay, slotKey);
-        appendPlannerSlotPickerSection(content, '其他推薦課程', otherCandidates, teacherMap, overlay, slotKey);
+        appendPlannerSlotPickerSection(content, t('planner-slot-recommended'), slotCandidates, teacherMap, overlay, slotKey, true);
+        appendPlannerSlotPickerSection(content, t('planner-other-recommended'), otherCandidates, teacherMap, overlay, slotKey);
 
         if (!slotCandidates.length && !otherCandidates.length) {
-            content.appendChild(createPlannerEmptyState('目前沒有可加入且不衝堂的課程。'));
+            content.appendChild(createPlannerEmptyState(t('planner-no-candidates')));
         }
 
         panel.appendChild(content);
@@ -5031,7 +5053,6 @@
         const allCandidates = state.planner.pool
             .filter((course) => !selectedIds.has(course.id))
             .filter((course) => !course.pinned)
-            .filter((course) => !hasPlannerConflictWithSelected(course, state.planner.selected))
             .sort((a, b) => comparePlannerCourses(b, a));
 
         const teacherMap = new Map();
@@ -5066,6 +5087,57 @@
             otherCandidates: otherCandidates.slice(0, 18),
             teacherMap
         };
+    }
+
+    function getPlannerPersistenceSnapshot() {
+        const describe = (courses) => courses.map((course) => ({
+            id: course.id, course: course.course, teacher: course.teacher || '',
+            credits: course.credits, pinned: Boolean(course.pinned), required: Boolean(course.required),
+            times: getPlannerTimetableTimes(course).slice().sort(),
+        })).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        return JSON.stringify({
+            targetCredits: state.planner.targetCredits, studentGrade: state.planner.studentGrade,
+            selected: describe(Array.from(state.planner.selected.values())),
+            fixed: describe(state.planner.uploadedCourses || []),
+        });
+    }
+
+    function hasUnpreservedPlannerChanges() {
+        if (!state.planner.hasPlan) return false;
+        if (!state.planner.selected.size && plannerPersistence.saved === null && plannerPersistence.exported === null) return false;
+        const snapshot = getPlannerPersistenceSnapshot();
+        return plannerPersistence.saved !== snapshot && plannerPersistence.exported !== snapshot;
+    }
+
+    function markPlannerPreserved(kind, snapshot) {
+        plannerPersistence[kind] = snapshot;
+        updatePlannerPersistenceReminder();
+    }
+
+    function handlePlannerBeforeUnload(event) {
+        if (plannerPersistence.leavePromptShown || !hasUnpreservedPlannerChanges()) return;
+        // 瀏覽器不允許自訂關閉視窗的提示文字；同一次瀏覽最多攔截一次。
+        plannerPersistence.leavePromptShown = true;
+        // 在事件結束前移除監聽器會讓 Chromium 略過確認，因此以旗標避免重複提示。
+        event.preventDefault();
+        event.returnValue = true;
+    }
+
+    function updatePlannerPersistenceReminder() {
+        const panel = document.getElementById('planner-preserve-panel');
+        const status = document.getElementById('planner-preserve-status');
+        const dirty = hasUnpreservedPlannerChanges();
+        panel?.classList.toggle('is-dirty', dirty);
+        const snapshot = getPlannerPersistenceSnapshot();
+        const key = dirty ? 'planner-preserve-pending'
+            : plannerPersistence.saved === snapshot ? 'planner-preserve-saved'
+            : plannerPersistence.exported === snapshot ? 'planner-preserve-exported' : 'planner-preserve-empty';
+        if (status && status.textContent !== t(key)) status.textContent = t(key);
+        const shouldListen = dirty && !plannerPersistence.leavePromptShown;
+        if (shouldListen !== plannerPersistence.listening) {
+            window[shouldListen ? 'addEventListener' : 'removeEventListener']('beforeunload', handlePlannerBeforeUnload);
+            plannerPersistence.listening = shouldListen;
+        }
     }
 
     function serializePlannerStateForSave() {
@@ -5109,7 +5181,7 @@
         };
     }
 
-    function appendPlannerSlotPickerSection(container, title, courses, teacherMap, overlay, slotKey) {
+    function appendPlannerSlotPickerSection(container, title, courses, teacherMap, overlay, slotKey, onlySlot = false) {
         if (!courses.length) return;
 
         const header = document.createElement('h5');
@@ -5121,17 +5193,41 @@
         list.className = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
         courses.forEach((course) => {
             const variants = (teacherMap.get(course.course) || [course])
-                .filter((variant) => {
-                    if (title === '此節可加入課程' && !variant.timeSlots.includes(slotKey)) return false;
-                    return !hasPlannerConflictWithSelected(variant, state.planner.selected);
-                });
-            const card = createPlannerCourseCard(course, {
-                actionLabel: t('add-action'),
+                .filter((variant) => !onlySlot || variant.timeSlots.includes(slotKey));
+            const available = variants.filter((variant) => !hasPlannerConflictWithSelected(variant, state.planner.selected));
+            const displayedCourse = available[0] || course;
+            const conflicts = Array.from(state.planner.selected.values())
+                .filter((selected) => plannerCoursesConflict(displayedCourse, selected));
+            const card = createPlannerCourseCard(displayedCourse, {
+                actionLabel: conflicts.length ? t('planner-resolve-conflict') : t('add-action'),
+                actionDisabled: conflicts.length > 0,
                 onAction: () => {
                     overlay.remove();
-                    plannerAddCourseWithTeacherPicker(course, variants.length ? variants : [course], false);
+                    plannerAddCourseWithTeacherPicker(displayedCourse, available, false);
                 }
             });
+            card.classList.add('planner-slot-course');
+            card.dataset.courseId = displayedCourse.id;
+            const status = document.createElement('p');
+            status.className = 'planner-slot-status';
+            if (conflicts.length) {
+                card.classList.add('has-conflict');
+                status.textContent = t('planner-conflict-count', { n: conflicts.length });
+                const detail = document.createElement('p');
+                detail.className = 'planner-slot-conflicts';
+                detail.textContent = conflicts.map((selected) => {
+                    const overlap = displayedCourse.timeSlots.filter((slot) => selected.timeSlots.includes(slot));
+                    const name = `${selected.course}${selected.pinned ? ` (${t('planner-conflict-fixed')})` : ''}`;
+                    return t('planner-conflict-detail', { name, time: formatCourseTimes(overlap) });
+                }).join('；');
+                const hint = document.createElement('p');
+                hint.className = 'planner-slot-conflict-hint';
+                hint.textContent = t('planner-conflict-hint');
+                card.append(detail, hint);
+            } else {
+                status.textContent = t(displayedCourse.timeSlots.length ? 'planner-no-conflict' : 'planner-time-unverified');
+            }
+            card.prepend(status);
             list.appendChild(card);
         });
         container.appendChild(list);
@@ -5183,6 +5279,16 @@
         applyFloatingTimetableSize();
     }
 
+    function isPlannerTimetableInViewport() {
+        if (activeView !== 'planner' || elements.plannerTimetableWrap?.classList.contains('hidden')) return false;
+        const table = elements.plannerTimetable;
+        if (!table) return false;
+        const rect = table.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0
+            && rect.bottom > 0 && rect.top < window.innerHeight
+            && rect.right > 0 && rect.left < window.innerWidth;
+    }
+
     function updateFloatingTimetableVisibility() {
         const floating = elements.floatingTimetable;
         const wrap = elements.plannerTimetableWrap;
@@ -5193,7 +5299,19 @@
             return;
         }
 
-        // 加課動畫期間固定顯示，不讓頁面 scroll 事件或分頁狀態把它關掉。
+        // 大課表已在視野內時，直接看更新結果；也停止尚未結束的浮動加課動畫。
+        if (isPlannerTimetableInViewport()) {
+            cancelPlannerCourseRevealAnimation();
+            state.planner.recentlyAddedRevealPendingId = null;
+            elements.floatingTimetableTable?.querySelectorAll('.is-reveal-pending').forEach((cell) => {
+                cell.classList.remove('is-reveal-pending');
+            });
+            floating.dataset.manuallyClosed = '';
+            floating.classList.add('hidden');
+            return;
+        }
+
+        // 看不到大課表時，保留浮動課表的加課提示動畫。
         if (floating.classList.contains('is-course-reveal-expanded')) {
             floating.classList.remove('hidden');
             return;
@@ -5215,15 +5333,7 @@
             floating.classList.add('hidden');
             return;
         }
-        const rect = wrap.getBoundingClientRect();
-        const isAboveViewport = rect.bottom < 0;
-        if (!isAboveViewport) {
-            // 原課表回到視野，重置手動關閉狀態
-            floating.dataset.manuallyClosed = '';
-            floating.classList.add('hidden');
-        } else if (floating.dataset.manuallyClosed !== 'true') {
-            floating.classList.remove('hidden');
-        }
+        floating.classList.toggle('hidden', floating.dataset.manuallyClosed === 'true');
     }
 
     // ── 課表助理聊天 ──────────────────────────────────────────
@@ -6622,6 +6732,7 @@
                 body: JSON.stringify({ name, courses }),
             });
             const data = await res.json();
+            if (!res.ok || !data?.planner?.id) return null;
             return data.planner;
         } catch (e) {
             console.warn('儲存排課計畫失敗', e);

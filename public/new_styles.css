@@ -1111,3 +1111,34 @@
         animation: none;
     }
 }
+
+/* Keep plan preservation visible while reviewing long course lists. */
+.planner-preserve-panel { position: sticky; top: .75rem; z-index: 35; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.125rem; border: 1px solid #c5dce5; border-radius: 12px; background: #f5fbfe; box-shadow: 0 3px 14px #00000008; }
+.dark .planner-preserve-panel { background: #202c32; border-color: #365460; }
+.planner-preserve-copy { flex: 1 1 16rem; }
+.planner-preserve-title { font-size: .875rem; font-weight: 700; }
+.planner-preserve-status { margin-top: .3rem; font-size: .75rem; line-height: 1.65; color: #52616a; }
+.dark .planner-preserve-status { color: #bbcbd1; }
+.planner-preserve-panel.is-dirty { border-color: #2eaadc; box-shadow: 0 0 0 1px #2eaadc28, 0 4px 18px #2eaadc12; }
+.planner-preserve-actions { display: flex; flex-wrap: wrap; gap: .65rem; border-radius: 10px; }
+.planner-preserve-button { display: inline-flex; justify-content: center; align-items: center; gap: .5rem; min-height: 44px; padding: .65rem 1rem; border: 1px solid #278db5; border-radius: 8px; color: #126e93; background: #fff; font-size: .875rem; font-weight: 650; transition: box-shadow .15s, background .15s; }
+.planner-preserve-button.is-primary { background: #137fa6; border-color: #137fa6; color: #fff; }
+.planner-preserve-button svg { width: 19px; height: 19px; flex-shrink: 0; }
+.planner-preserve-button:hover { box-shadow: 0 2px 8px #137fa633; }
+.planner-preserve-button:focus-visible { outline: 3px solid #2eaadc; outline-offset: 3px; }
+.planner-preserve-button:disabled { opacity: .55; cursor: wait; }
+.dark .planner-preserve-button:not(.is-primary) { background: #202c32; color: #8fd6f3; border-color: #538b9f; }
+.planner-preserve-panel.is-dirty .planner-preserve-actions { animation: plannerPreserveNudge 2.4s ease-out 3; }
+@keyframes plannerPreserveNudge { 0%, 100% { box-shadow: 0 0 0 0 #2eaadc00; } 25% { box-shadow: 0 0 0 6px #2eaadc35; } 60% { box-shadow: 0 0 0 10px #2eaadc00; } }
+.planner-slot-course.has-conflict { border-color: #c78728; background: #fffaf0; }
+.dark .planner-slot-course.has-conflict { border-color: #8a622f; background: #30291e; }
+.planner-slot-status { align-self: flex-start; padding: .15rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 650; color: #12654e; background: #e3f5ed; }
+.planner-slot-course.has-conflict .planner-slot-status { color: #825012; background: #ffedc2; }
+.dark .planner-slot-status { color: #a0ddc7; background: #1e4035; }
+.dark .planner-slot-course.has-conflict .planner-slot-status { color: #ffdfa0; background: #624820; }
+.planner-slot-conflicts { font-size: .75rem; line-height: 1.6; font-weight: 600; color: #825012; overflow-wrap: anywhere; }
+.dark .planner-slot-conflicts { color: #f1ce96; }
+.planner-slot-conflict-hint { font-size: .72rem; line-height: 1.6; color: #787774; }
+.dark .planner-slot-conflict-hint { color: #b9b2a7; }
+@media (max-width: 639px) { .planner-preserve-panel { top: .3rem; padding: .85rem; gap: .65rem; } .planner-preserve-actions { width: 100%; } .planner-preserve-button { flex: 1; } }
+@media (prefers-reduced-motion: reduce) { .planner-preserve-panel.is-dirty .planner-preserve-actions { animation: none; } }
