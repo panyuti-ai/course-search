@@ -798,8 +798,7 @@
         const plannerSaveBtn = document.getElementById('planner-save-db');
         if (plannerSaveBtn) {
             plannerSaveBtn.addEventListener('click', async () => {
-                const selectedCourses = Array.from(state.planner.selected?.values() || []);
-                if (!selectedCourses.length) { showToast(t('no-courses-alert'), 'error'); return; }
+                if (!state.planner.hasPlan) { showToast(t('no-courses-alert'), 'error'); return; }
                 const courses = serializePlannerStateForSave();
                 const snapshot = getPlannerPersistenceSnapshot();
                 const name = prompt(t('enter-plan-name'), `${t('default-plan-name')} ${new Date().toLocaleDateString()}`);
@@ -5104,7 +5103,8 @@
     }
 
     function hasUnpreservedPlannerChanges() {
-        if (!state.planner.hasPlan || !state.planner.selected.size) return false;
+        if (!state.planner.hasPlan) return false;
+        if (!state.planner.selected.size && plannerPersistence.saved === null && plannerPersistence.exported === null) return false;
         const snapshot = getPlannerPersistenceSnapshot();
         return plannerPersistence.saved !== snapshot && plannerPersistence.exported !== snapshot;
     }
@@ -5129,9 +5129,9 @@
         const dirty = hasUnpreservedPlannerChanges();
         panel?.classList.toggle('is-dirty', dirty);
         const snapshot = getPlannerPersistenceSnapshot();
-        const key = !state.planner.selected.size ? 'planner-preserve-empty'
-            : dirty ? 'planner-preserve-pending'
-            : plannerPersistence.saved === snapshot ? 'planner-preserve-saved' : 'planner-preserve-exported';
+        const key = dirty ? 'planner-preserve-pending'
+            : plannerPersistence.saved === snapshot ? 'planner-preserve-saved'
+            : plannerPersistence.exported === snapshot ? 'planner-preserve-exported' : 'planner-preserve-empty';
         if (status && status.textContent !== t(key)) status.textContent = t(key);
         const shouldListen = dirty && !plannerPersistence.leavePromptShown;
         if (shouldListen !== plannerPersistence.listening) {
