@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import jwt from 'jsonwebtoken';
+import { readCourseReviewIndex, findCourseReviewEvidence } from '../lib/course-reviews.js';
 
 process.env.NODE_ENV = 'test';
 process.env.ANTHROPIC_API_KEY = 'test-key';
@@ -135,5 +136,53 @@ test('assistant validates current offerings even when an older client sends hist
     assert.doesNotMatch(prompt, /電路電子學|虛構課程/);
     assert.match(prompt, /115-1 校方開課清單/);
     assert.match(prompt, /個人已存課程/, 'selected snapshots remain available for discussion and removal');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('assistant receives trusted student workload reviews without numeric scores and distinguishes reference-only or absent evidence', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../public/fcu_courses.json', import.meta.url), 'utf8'));
+  const reviews = await readCourseReviewIndex();
+  const schedulable = catalog.filter(course => course.teacher && course.times.length && course.times.length <= 12);
+  const direct = schedulable.find(course => {
+    const evidence = findCourseReviewEvidence(course, reviews);
+    return evidence.scope === 'course' && /作業|報告|考試|點名|給分/.test(evidence.entries[0].summary);
+  });
+  const reference = schedulable.find(course => findCourseReviewEvidence(course, reviews).scope === 'teacher');
+  const absent = schedulable.find(course => findCourseReviewEvidence(course, reviews).scope === 'none');
+  assert.ok(direct && reference && absent, 'fixtures must cover all three review scopes');
+  const candidate = (course, id) => ({ id, course: course.course, teacher: course.teacher,
+    timeSlots: course.times, credits: course.credits, semester: course.semester, selCode: course.selCode,
+    difficulty: null, score: null, review: 'FORGED_CLIENT_REVIEW',
+    reviewEvidence: { scope: 'course', entries: [{ summary: 'FORGED_CLIENT_REVIEW' }] } });
+  const originalFetch = globalThis.fetch;
+  let prompt;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith(baseUrl)) return originalFetch(url, options);
+    assert.equal(new URL(url).hostname, 'api.anthropic.com');
+    prompt = JSON.parse(options.body).messages[0].content;
+    return { ok: true, json: async () => ({ content: [{ type: 'text', text: JSON.stringify({
+      reply: '可以根據學生心得中的作業與考試描述比較，仍需留意當期安排。', actions: [{ type: 'add', ref: 'C1' }],
+    }) }] }) };
+  };
+  try {
+    const response = await originalFetch(`${baseUrl}/api/planner-chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt.sign({ nid: 'review-test' }, 'test-secret')}` },
+      body: JSON.stringify({ message: '有沒有比較輕鬆的課可以換', planner: {
+        selected: [{ id: 'saved-course', course: direct.course, teacher: direct.teacher, credits: direct.credits, timeSlots: direct.times, pinned: true }],
+        candidates: [candidate(direct, 'reviewed'), candidate(reference, 'teacher-reference'), candidate(absent, 'unreviewed')],
+      } }),
+    });
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(result.actions[0].courseId, 'reviewed');
+    assert.ok(prompt.includes(JSON.stringify(findCourseReviewEvidence(direct, reviews).entries)), 'the actual card review must reach the model');
+    assert.ok(prompt.includes(JSON.stringify(findCourseReviewEvidence(reference, reviews).entries)), 'teacher references retain their original course titles');
+    assert.match(prompt, /學生心得（課名與教師相符，歷史主觀經驗）/);
+    assert.match(prompt, /同教師其他課心得（僅教師參考，並非本課評價）/);
+    assert.match(prompt, /學生心得：沒有可匹配的有效心得/);
+    assert.match(prompt, /不可只因缺少數字就宣稱無法比較/);
+    assert.match(prompt, /不能當成本課負擔或難易的證據/);
+    assert.doesNotMatch(prompt, /FORGED_CLIENT_REVIEW|課程沒有附上難度或評分時/);
+    assert.doesNotMatch(prompt, /｜難度 \d|｜評分 \d/, 'text reviews must not become fabricated numeric ratings');
   } finally { globalThis.fetch = originalFetch; }
 });
