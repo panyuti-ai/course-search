@@ -371,16 +371,23 @@
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" id="planner-save-db"
-                                class="px-4 py-2 border border-notion-border dark:border-dark-border text-sm font-medium rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150"
-                                data-i18n-text="save-btn">
-                                儲存課表
-                            </button>
-                            <button type="button" id="planner-export-pdf"
-                                class="px-4 py-2 border border-notion-border dark:border-dark-border text-sm font-medium rounded-md hover:bg-notion-bg-hover dark:hover:bg-dark-card transition-colors duration-150">
-                                匯出課表
-                            </button>
+                        <div id="planner-preserve-panel" class="planner-preserve-panel">
+                            <div class="planner-preserve-copy">
+                                <p class="planner-preserve-title" data-i18n-text="planner-preserve-title">離開前，記得保存你的課表</p>
+                                <p id="planner-preserve-status" class="planner-preserve-status" role="status" aria-live="polite"></p>
+                            </div>
+                            <div class="planner-preserve-actions">
+                                <button type="button" id="planner-save-db"
+                                    class="planner-preserve-button is-primary">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3h2Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>
+                                    <span class="planner-action-label" data-i18n-text="save-btn">儲存課表</span>
+                                </button>
+                                <button type="button" id="planner-export-pdf"
+                                    class="planner-preserve-button">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>
+                                    <span data-i18n-text="planner-export-btn">匯出課表</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div id="planner-summary" class="hidden text-sm text-notion-text-secondary dark:text-dark-text-secondary"></div>
