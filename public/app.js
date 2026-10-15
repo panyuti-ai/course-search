@@ -4531,11 +4531,12 @@
 
             const frag = document.createDocumentFragment();
             list.slice(0, shown).forEach((course) => {
-                const conflict = hasPlannerConflictWithSelected(course, state.planner.selected);
                 const teachers = teacherMap.get(course.course) || [course];
-                const card = createPlannerCourseCard(course, {
+                const { displayedCourse, available } = getPlannerCandidateVariants(course, teachers);
+                const conflict = available.length === 0;
+                const card = createPlannerCourseCard(displayedCourse, {
                     actionLabel: conflict ? t('conflict').replace('✗ ', '') : t('add-action'),
-                    onAction: () => plannerAddCourseWithTeacherPicker(course, teachers, conflict),
+                    onAction: () => plannerAddCourseWithTeacherPicker(displayedCourse, available, conflict),
                     actionDisabled: conflict,
                     actionTitle: conflict ? t('conflict-planner') : ''
                 });
@@ -5181,6 +5182,11 @@
         };
     }
 
+    function getPlannerCandidateVariants(course, variants) {
+        const available = variants.filter((variant) => !hasPlannerConflictWithSelected(variant, state.planner.selected));
+        return { displayedCourse: available[0] || course, available };
+    }
+
     function appendPlannerSlotPickerSection(container, title, courses, teacherMap, overlay, slotKey, onlySlot = false) {
         if (!courses.length) return;
 
@@ -5194,8 +5200,7 @@
         courses.forEach((course) => {
             const variants = (teacherMap.get(course.course) || [course])
                 .filter((variant) => !onlySlot || variant.timeSlots.includes(slotKey));
-            const available = variants.filter((variant) => !hasPlannerConflictWithSelected(variant, state.planner.selected));
-            const displayedCourse = available[0] || course;
+            const { displayedCourse, available } = getPlannerCandidateVariants(course, variants);
             const conflicts = Array.from(state.planner.selected.values())
                 .filter((selected) => plannerCoursesConflict(displayedCourse, selected));
             const card = createPlannerCourseCard(displayedCourse, {
