@@ -1142,3 +1142,5 @@
 .dark .planner-slot-conflict-hint { color: #b9b2a7; }
 @media (max-width: 639px) { .planner-preserve-panel { top: .3rem; padding: .85rem; gap: .65rem; } .planner-preserve-actions { width: 100%; } .planner-preserve-button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .planner-preserve-panel.is-dirty .planner-preserve-actions { animation: none; } }
+.planner-historical-note { font-size: .75rem; line-height: 1.65; color: #825012; font-weight: 600; }
+.dark .planner-historical-note { color: #f1ce96; }

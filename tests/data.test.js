@@ -9,7 +9,6 @@ async function readJson(relativePath) {
 
 test('course data files contain usable course records', async () => {
   const files = [
-    'public/courses.json',
     'public/fcu_courses.json',
     'public/course_reviews.json'
   ];
@@ -36,6 +35,12 @@ test('official FCU records keep scheduling fields in the expected shape', async 
   assert.ok(records.length > 1000, 'official course data is unexpectedly small');
   assert.equal(records.filter((record) => !Array.isArray(record.times)).length, 0);
   assert.equal(records.filter((record) => typeof record.semester !== 'string').length, 0);
+  assert.deepEqual([...new Set(records.map(record => record.semester))], ['115-1']);
+  assert.ok(records.every(record => record.source === 'fcu_scrape' && /^\d{4}$/.test(record.selCode)));
+  assert.equal(new Set(records.map(record => record.selCode)).size, records.length);
+  assert.equal(new Set(records.map(record => record.id)).size, records.length, 'favorite identities must be unique');
+  assert.ok(records.every(record => typeof record.id === 'string' && record.id.length > 0));
+  assert.equal(records.some(record => record.course === '電路電子學'), false, 'historical-only courses must not be offered');
 });
 
 test('every supported language includes the PDF privacy notice', async () => {

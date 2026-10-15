@@ -287,7 +287,17 @@ let outlineCatalog;
 async function getOutlineCatalog() {
   if (!outlineCatalog) {
     outlineCatalog = readFile(new URL('./public/fcu_courses.json', import.meta.url), 'utf8')
-      .then(text => new Map(JSON.parse(text).map(course => [outlineKey(course.semester, course.selCode), course])))
+      .then(text => {
+        const courses = JSON.parse(text).filter(course => course.source === 'fcu_scrape' &&
+          validCourseIdentity(course.semester, course.selCode));
+        if (!courses.length) throw new Error('Official course catalog unavailable');
+        const current = courses.map(course => course.semester).sort((a, b) => {
+          const key = value => { const [year, term] = value.split('-').map(Number); return year * 10 + term; };
+          return key(b) - key(a);
+        })[0];
+        return new Map(courses.filter(course => course.semester === current)
+          .map(course => [outlineKey(course.semester, course.selCode), course]));
+      })
       .catch(error => { outlineCatalog = undefined; throw error; });
   }
   return outlineCatalog;
@@ -295,10 +305,11 @@ async function getOutlineCatalog() {
 const liveOutlines = new Map();
 const pendingOutlines = new Map();
 app.get('/api/course-outlines', async (req, res) => {
-  const semester = String(req.query.semester || '115-1');
-  if (!validCourseIdentity(semester, '0001')) return res.status(400).json({error:'Invalid semester'});
+  const requestedSemester = req.query.semester;
+  if (requestedSemester && !validCourseIdentity(String(requestedSemester), '0001')) return res.status(400).json({error:'Invalid semester'});
   try {
     const [data, catalog] = await Promise.all([readOutlines(), getOutlineCatalog()]);
+    const semester = String(requestedSemester || catalog.values().next().value?.semester || '');
     const previews = {};
     const courses = [...catalog.values()].filter(course => course.semester === semester);
     for (const course of courses) {
@@ -421,6 +432,8 @@ app.get("/api/course-grade-rules", courseGradeRateLimiter, async (req, res) => {
   }
 
   try {
+    const catalog = await getOutlineCatalog();
+    if (!catalog.has(cacheKey)) return res.status(404).json({error: 'Course not in current catalog'});
     const items = await fetchFcuGradeRules(semester, selCode);
     courseGradeCache.set(cacheKey, { items, fetchedAt: Date.now() });
     res.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=21600");
@@ -714,6 +727,8 @@ function normalizeChatCourses(list, limit) {
     .slice(0, limit)
     .map((item) => ({
       id: typeof item.id === "string" ? item.id : String(item.id ?? ""),
+      semester: typeof item.semester === "string" ? item.semester.trim().slice(0, 5) : "",
+      selCode: typeof item.selCode === "string" ? item.selCode.trim().slice(0, 4) : "",
       course: item.course.trim().slice(0, 80),
       teacher: typeof item.teacher === "string" ? item.teacher.trim().slice(0, 40) : "",
       credits: Number.isFinite(item.credits) ? item.credits : null,
@@ -773,9 +788,30 @@ app.post("/api/planner-chat", requireAuth, chatRateLimiter, async (req, res) => 
   }
 
   const selected = normalizeChatCourses(planner?.selected, CHAT_MAX_SELECTED);
-  const candidates = normalizeChatCourses(planner?.candidates, CHAT_MAX_CANDIDATES);
   if (!selected.length) {
     return res.status(400).json({ error: "目前沒有課表可以討論，請先產生建議課表。" });
+  }
+  let candidates;
+  let currentSemester;
+  try {
+    const catalog = await getOutlineCatalog();
+    const offerings = [...catalog.values()];
+    currentSemester = offerings[0]?.semester;
+    const normalize = value => String(value || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+    candidates = normalizeChatCourses(planner?.candidates, CHAT_MAX_CANDIDATES).filter(course => {
+      if (course.semester && course.semester !== currentSemester) return false;
+      const matches = offering => normalize(offering.course) === normalize(course.course) &&
+        (!course.teacher || normalize(offering.teacher).startsWith(normalize(course.teacher))) &&
+        course.timeSlots.every(slot => offering.times.includes(slot));
+      if (course.selCode) {
+        const offering = catalog.get(outlineKey(currentSemester, course.selCode));
+        return Boolean(offering && matches(offering));
+      }
+      // Also validate older clients that did not send school identities.
+      return course.timeSlots.length > 0 && offerings.some(matches);
+    });
+  } catch {
+    return res.status(503).json({ error: "當期校方開課清單暫時無法使用，請稍後再試。" });
   }
 
   const targetCredits = Number.isFinite(planner?.targetCredits) ? planner.targetCredits : null;
@@ -800,7 +836,7 @@ app.post("/api/planner-chat", requireAuth, chatRateLimiter, async (req, res) => 
 目前課表（代號 S 開頭）：
 ${formatChatCourseLines(selected, "S") || "（無）"}
 
-可加入的候選課程（代號 C 開頭）：
+可加入的候選課程（已核對 ${currentSemester} 校方開課清單，代號 C 開頭）：
 ${formatChatCourseLines(candidates, "C") || "（無）"}
 
 ${historyText ? `先前的對話：\n${historyText}\n` : ""}
